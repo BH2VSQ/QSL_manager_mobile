@@ -78,6 +78,21 @@ class GithubUpdateService {
 
   void dispose() => _client.close();
 
+  /// Removes downloaded APK files left behind after an update was installed.
+  /// Called on startup so the temporary update directory does not accumulate
+  /// large installer files across successive updates.
+  static Future<void> clearUpdateCache() async {
+    try {
+      final directory = await getTemporaryDirectory();
+      final updateDir = Directory('${directory.path}${Platform.pathSeparator}qslmm_updates');
+      if (await updateDir.exists()) {
+        await updateDir.delete(recursive: true);
+      }
+    } catch (_) {
+      // Best-effort cleanup; never let cache clearing crash startup.
+    }
+  }
+
   Uri get latestReleaseUri => Uri.parse('https://api.github.com/repos/$githubOwner/$githubRepo/releases/latest');
 
   Future<UpdateCheckResult> checkLatest() async {
