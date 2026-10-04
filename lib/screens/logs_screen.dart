@@ -169,12 +169,19 @@ class _LogsScreenState extends State<LogsScreen> {
     );
     if (result == null) return;
 
-    final eligible = selected.where((log) => result.direction == 'TC' ? log.qslSent.toUpperCase() != 'Y' : log.qslRcvd.toUpperCase() != 'Y').toList(growable: false);
-    final skipped = selected.length - eligible.length;
-    if (eligible.isEmpty) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('所选日志已经全部存在对应卡片记录')));
-      return;
+    final eligible = selected.where((log) => direction == 'TC' ? log.qslSent.toUpperCase() != 'Y' : log.qslRcvd.toUpperCase() != 'Y').toList(growable: false);
+    final skipped = selected.where((log) => direction == 'TC' ? log.qslSent.toUpperCase() == 'Y' : log.qslRcvd.toUpperCase() == 'Y').toList(growable: false);
+
+    // Logs that already carry a card in this direction: offer to reprint their
+    // label instead of silently dropping them.
+    if (skipped.isNotEmpty) {
+      final reprint = await _confirmReprint(skipped.length, direction);
+      if (reprint) {
+        await _reprintSkipped(skipped, direction, result.qslMessage);
+      }
     }
+
+    if (eligible.isEmpty) return;
 
     setState(() => generating = true);
     try {
@@ -189,13 +196,52 @@ class _LogsScreenState extends State<LogsScreen> {
       final ids = cards.map((e) => e['qsl_id']?.toString()).whereType<String>().where((e) => e.isNotEmpty).toList();
       final message = StringBuffer('已成功颁发 ${ids.length} 个 QSL 编号，并加入服务器打印队列');
       if (ids.isNotEmpty) message.write('\n${ids.join('、')}');
-      if (skipped > 0) message.write('\n已跳过 $skipped 条已有对应卡片的日志');
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message.toString()), duration: const Duration(seconds: 4)));
       await _load();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('颁发失败：$e')));
     } finally {
       if (mounted) setState(() => generating = false);
+    }
+  }
+
+  Future<bool> _confirmReprint(int count, String direction) async {
+    final label = direction == 'TC' ? '发卡' : '收卡';
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('已存在 QSL 编号'),
+        content: Text('$count 条日志已存在$label编号，是否需要补打标签？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('暂不')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('补打标签')),
+        ],
+      ),
+    );
+    return yes == true;
+  }
+
+  Future<void> _reprintSkipped(List<QsoLog> logs, String direction, String qslMessage) async {
+    final seen = <String>{};
+    var count = 0;
+    for (final log in logs) {
+      for (final card in log.qslCards) {
+        if (card.direction != direction || card.qslId.isEmpty || !seen.add(card.qslId)) continue;
+        try {
+          await widget.controller.api.addPrintQueue(
+            qslId: card.qslId,
+            direction: direction,
+            logIds: card.logIds,
+            qslMessage: qslMessage,
+          );
+          count++;
+        } catch (e) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('补打 ${card.qslId} 失败：$e')));
+        }
+      }
+    }
+    if (mounted && count > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已将 $count 个标签加入打印队列')));
     }
   }
 
