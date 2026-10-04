@@ -288,23 +288,6 @@ class _LogDetailScreenState extends State<LogDetailScreen> {
                         const SizedBox(height: 12),
                         ConsolePanel(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            const SectionHeader(label: '完整记录信息'),
-                            const SizedBox(height: 10),
-                            _readOnlyRow('结束时间', current.timeOff),
-                            _readOnlyRow('我方网格', current.myGridsquare),
-                            _readOnlyRow('对方网格', current.gridsquare),
-                            _readOnlyRow('笔记', current.notes),
-                            _readOnlyRow('卫星模式', current.satMode),
-                            _readOnlyRow('中继台', current.repeaterCallsign),
-                            _readOnlyRow('中继位置', current.repeaterLocation),
-                            _readOnlyRow('上行频率', current.uplinkFreq?.toString() ?? ''),
-                            _readOnlyRow('下行频率', current.downlinkFreq?.toString() ?? ''),
-                            _readOnlyRow('发射功率', current.txPwr?.toString() ?? ''),
-                          ]),
-                        ),
-                        const SizedBox(height: 12),
-                        ConsolePanel(
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             const SectionHeader(label: '关联 QSL 卡片'),
                             const SizedBox(height: 10),
                             if (current.qslCards.isEmpty)

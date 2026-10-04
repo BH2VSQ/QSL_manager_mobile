@@ -146,12 +146,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          const Text(
-            'QSL Manager Mobile 0.2.8  •  REST API  •  无认证',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 8, color: AppPalette.textDim, letterSpacing: .5),
-          ),
         ],
       ),
     );

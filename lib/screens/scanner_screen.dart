@@ -195,11 +195,6 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
               ],
             ),
           ),
-        const SizedBox(height: 12),
-        const Text(
-          '扫描 QSL 二维码后直接调用 /qsl/scan；由服务器判断当前卡片执行入库还是出库。',
-          style: TextStyle(fontSize: 9, color: AppPalette.textDim, height: 1.5),
-        ),
       ],
     );
   }

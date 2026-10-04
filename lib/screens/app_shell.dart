@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../core/app_controller.dart';
@@ -30,6 +31,8 @@ class _AppShellState extends State<AppShell> {
   // and its transient search/selection state is cleared.
   final List<int> _refreshTokens = List<int>.filled(5, 0);
 
+  DateTime? _lastBackPressed;
+
   Future<void> _selectTab(int value) async {
     if (value < 0 || value >= _refreshTokens.length || value == index) return;
 
@@ -49,6 +52,26 @@ class _AppShellState extends State<AppShell> {
       _refreshTokens[value]++;
     });
     if (value == 3) _scannerTabActive.value = true;
+  }
+
+  Future<void> _handleBack() async {
+    // Back first returns to the overview tab instead of exiting the app.
+    if (index != 0) {
+      await _selectTab(0);
+      return;
+    }
+
+    final now = DateTime.now();
+    final last = _lastBackPressed;
+    if (last != null && now.difference(last) < const Duration(seconds: 2)) {
+      SystemNavigator.pop();
+      return;
+    }
+
+    _lastBackPressed = now;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('再次返回退出应用'), duration: Duration(seconds: 2)),
+    );
   }
 
   @override
@@ -84,67 +107,73 @@ class _AppShellState extends State<AppShell> {
     final revision = widget.controller.connectionRevision;
     final pageKey = ValueKey('${revision}_${index}_${_refreshTokens[index]}');
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('QSL // 移动控制台'),
-        actions: [
-          InkWell(
-            onTap: widget.controller.checkHealth,
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: online ? AppPalette.cyan : AppPalette.pink,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('QSL // 移动控制台'),
+          actions: [
+            InkWell(
+              onTap: widget.controller.checkHealth,
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: online ? AppPalette.cyan : AppPalette.pink,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    online ? '已连接' : '未连接',
-                    style: const TextStyle(fontSize: 9, letterSpacing: 1.1),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    Text(
+                      online ? '已连接' : '未连接',
+                      style: const TextStyle(fontSize: 9, letterSpacing: 1.1),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-      body: KeyedSubtree(key: pageKey, child: _buildPage()),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: _selectTab,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.space_dashboard_outlined),
-            selectedIcon: Icon(Icons.space_dashboard),
-            label: '概览',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.table_rows_outlined),
-            selectedIcon: Icon(Icons.table_rows),
-            label: '日志',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.style_outlined),
-            selectedIcon: Icon(Icons.style),
-            label: 'QSL',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.qr_code_scanner_outlined),
-            selectedIcon: Icon(Icons.qr_code_scanner),
-            label: '扫码',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.tune_outlined),
-            selectedIcon: Icon(Icons.tune),
-            label: '控制',
-          ),
-        ],
+          ],
+        ),
+        body: KeyedSubtree(key: pageKey, child: _buildPage()),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: index,
+          onDestinationSelected: _selectTab,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.space_dashboard_outlined),
+              selectedIcon: Icon(Icons.space_dashboard),
+              label: '概览',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.table_rows_outlined),
+              selectedIcon: Icon(Icons.table_rows),
+              label: '日志',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.style_outlined),
+              selectedIcon: Icon(Icons.style),
+              label: 'QSL',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.qr_code_scanner_outlined),
+              selectedIcon: Icon(Icons.qr_code_scanner),
+              label: '扫码',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.tune_outlined),
+              selectedIcon: Icon(Icons.tune),
+              label: '控制',
+            ),
+          ],
+        ),
       ),
     );
   }
