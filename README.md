@@ -1,75 +1,93 @@
-# QSL Manager Mobile
+# QSLMM
 
-基于 Flutter 开发的 Android 移动端控制台，用于连接 [BH2VSQ/QSLCard-Manager](https://github.com/BH2VSQ/QSLCard-Manager) 的 REST API。
+Flutter Android 移动端控制台，用于连接 [BH2VSQ/QSLCard-Manager](https://github.com/BH2VSQ/QSLCard-Manager)。
 
-> 当前项目主要面向 Android 手机使用。APP 不实现业务数据库，数据与 QSL 业务流程均由 QSLCard-Manager 服务器处理。
+## 基本信息
 
-## 界面
+- Android 应用显示名称：**QSLMM**
+- Android Android Application ID / 包名：**`cn.bh2vsq.qslmanager`**
+- UI：专业移动控制台风格
+- 主色：`#5BCFFA` / `#F5ABB9` / `#FFFFFF`
+- 支持：白天 / 夜间模式
 
-采用专业控制台风格，核心配色：
+## 主要功能
 
-- 蓝色：`#5BCFFA`
-- 粉色：`#F5ABB9`
-- 白色：`#FFFFFF`
+- 概览：QSO、QSL 状态、最近活动
+- 日志：搜索、ADIF 导入、完整详情、编辑、QSL 编号颁发
+- QSL：QSL 编号搜索、扫码搜索、详情、关联日志、补打
+- 扫码：QSL 收发状态处理
+- 地址簿：联系人维护、FROM / TO 地址标签推送
+- 设置：服务器地址、连接诊断、显示模式
 
-支持**白天 / 夜间模式**切换，并记忆用户选择。
+移动端不显示打印队列，但 QSL/地址标签任务仍按服务器 API 推送到 QSLCard-Manager 的打印系统。
 
-## 功能
+## 开发环境
 
-### 概览
+建议使用已安装 Flutter SDK 的 Windows/macOS/Linux 开发环境。
 
-- API 在线状态
-- QSO 总数
-- 已发 QSL
-- 已收 QSL
-- 待处理数量
-- 最近收发卡活动
+安装依赖：
 
-### QSO 日志
+```bash
+flutter pub get
+```
 
-- 分页查看日志
-- 呼号搜索
-- 查看完整日志详情
-- 编辑日志
-- ADIF 文件上传
-- 单条或多条日志选择
-- 按选择的日志颁发 TC / RC QSL 编号
-- 支持单卡合并或逐条发号
-- 每条日志显示收卡 / 发卡状态
+## Android 配置
 
-QSL 颁号完成后，打印任务仍由服务器加入打印队列；手机端不显示打印队列。
+本源码包包含 Flutter/Dart 源码和图标资源。若仓库中尚未生成 Android 主机目录：
 
-### QSL 卡片
+```powershell
+flutter create . --platforms=android
+```
 
-- 按 QSL 编号搜索
-- 扫码输入 QSL 编号
-- 查看卡片详情
-- 查看关联日志
-- QSL 标签补打
+然后应用 Android 包名与应用名称配置：
 
-### 扫码
+```powershell
+.\tool\configure_android_branding.ps1
+```
 
-- 扫描 QSL 二维码
-- 扫描结果提交服务器的收发卡流程
-- 相机生命周期在标签页切换和 APP 前后台切换时自动管理
+脚本会将：
 
-### 地址簿
+```text
+Application ID / Namespace
+cn.bh2vsq.qslmanager
 
-- 新建 / 编辑 / 删除地址
-- 地址、邮政编码、电话、国家 / 地区独立保存
-- 国家 / 地区字段可留空
-- 地址标签打印支持：
-  - `FROM（发自）`
-  - `TO（发往）`
-- 打印任务直接推送至服务器打印队列，手机端不显示队列
+应用显示名称
+QSLMM
+```
 
-### 设置
+并调整 `MainActivity` 的 Kotlin/Java 包路径。
 
-- 修改 QSL Manager API 服务器地址
-- 测试服务器连接
-- 白天 / 夜间模式
+## 应用图标
 
-## API 服务器
+项目中的官方应用图标位于：
+
+```text
+assets/icon/qslmm_icon.png
+```
+
+Android Launcher Icon 资源已经随源码提供，不依赖额外图标生成命令。执行 Android 品牌配置脚本时会自动把图标复制到 `android/app/src/main/res/mipmap-*`。
+
+## 运行
+
+```bash
+flutter run
+```
+
+## 构建 Release APK
+
+```bash
+flutter clean
+flutter pub get
+flutter build apk --release
+```
+
+生成文件通常位于：
+
+```text
+build/app/outputs/flutter-apk/app-release.apk
+```
+
+## 服务器地址
 
 默认 API：
 
@@ -77,115 +95,62 @@ QSL 颁号完成后，打印任务仍由服务器加入打印队列；手机端�
 http://10.0.2.2:7055/api
 ```
 
-`10.0.2.2` 仅适用于 Android Emulator，真机应填写 QSL Manager 服务器在局域网中的地址，例如：
+Android 模拟器访问宿主机时可使用 `10.0.2.2`；真机请填写 QSLCard-Manager 所在设备的局域网地址，例如：
 
 ```text
-http://192.168.x.xxx:7055/api
+http://192.168.2.209:7055/api
 ```
 
-也可以直接输入：
+APP 会自动规范服务器地址并请求：
 
 ```text
-192.168.x.xxx:7055
+http://192.168.2.209:7055/api/health
 ```
 
-APP 会自动补齐 `http://` 和 `/api`。
+## 发布到 GitHub
 
-健康检查接口：
+不要将以下文件提交到公开仓库：
 
 ```text
-GET /api/health
+android/key.properties
+*.jks
+*.keystore
+*.p12
 ```
 
-## 开发环境
+如果使用个人签名 keystore，请将其保存在仓库之外。
 
-推荐使用当前稳定版 Flutter SDK，并确保 Dart SDK 满足 `pubspec.yaml` 中的最低版本要求。
+## 服务端职责
 
-安装依赖：
+QSLMM 不复制服务端业务规则。打印队列、地址标签模板、QSL 编号、库存状态等业务逻辑由 QSLCard-Manager 服务端负责。
 
-```powershell
-flutter pub get
-```
 
-运行：
+## 应用内检查更新
 
-```powershell
-flutter run
-```
+控制页提供“检查更新”。APP 会访问公开的 GitHub Releases API，检查 `BH2VSQ/QSL_manager_mobile` 的最新正式 Release；GitHub 的 latest release 接口只返回已发布且非草稿、非预发布版本。
 
-构建 Release APK：
+Release 中上传 `.apk` 资产后，APP 会显示版本号与 Release Notes，用户可选择下载 APK；下载完成后可选择立即安装。Android 8.0 及以上系统会要求用户允许 QSLMM 安装来自其他来源的应用，这是 Android Package Installer 的系统安全机制。
 
-```powershell
-flutter clean
-flutter pub get
-flutter build apk --release
-```
+GitHub Release 标签建议使用 `v0.2.11` 这样的语义化版本，并在 Release Assets 中上传可直接安装的通用 APK。
 
-输出通常位于：
+
+
+## 自动构建与发布
+
+GitHub Actions 工作流位于 `.github/workflows/release.yml`。向 `main` 分支 push 后会自动执行依赖安装、静态检查、测试、正式签名 APK 构建，并创建 GitHub Release，同时上传 APK 和 SHA-256 校验文件。
+
+首次启用前需要在 GitHub `Settings -> Secrets and variables -> Actions` 中配置：
 
 ```text
-build/app/outputs/flutter-apk/app-release.apk
+ANDROID_KEYSTORE_BASE64
+ANDROID_KEYSTORE_PASSWORD
+ANDROID_KEY_ALIAS
+ANDROID_KEY_PASSWORD
 ```
 
-## Android 初始化
+具体配置方法见 `docs/GITHUB_ACTIONS_RELEASE.md`。
 
-当前仓库提交的是 Flutter/Dart 应用源码；首次准备 Android 平台文件时执行：
 
-```powershell
-flutter create . --platforms=android
-flutter pub get
-```
+### 依赖兼容说明
 
-项目使用 HTTP API 时，需要确认 AndroidManifest 允许 cleartext HTTP，并声明网络与摄像头权限。可以参考：
-
-```text
-docs/ANDROID_SETUP.md
-```
-
-如果你已经有可正常构建的 `android/` 目录，建议直接将该目录一并提交到 GitHub，而不必重复执行 `flutter create`。
-
-## API 对照
-
-移动端主要使用的接口见：
-
-```text
-docs/API_MAPPING.md
-```
-
-API 的正式定义以 QSLCard-Manager 仓库中的 `docs/API.md` 为准。
-
-## 项目结构
-
-```text
-qsl_manager_mobile/
-├── lib/
-│   ├── core/          # 全局控制器、主题
-│   ├── models/        # 数据模型
-│   ├── screens/       # 页面
-│   ├── services/      # REST API
-│   ├── widgets/       # 通用控制台组件
-│   └── main.dart      # 程序入口
-├── docs/
-│   ├── API_MAPPING.md
-│   └── ANDROID_SETUP.md
-├── analysis_options.yaml
-├── pubspec.yaml
-└── README.md
-```
-
-## GitHub 发布建议
-
-不要提交以下内容：
-
-- `.dart_tool/`
-- `build/`
-- IDE 配置文件
-- APK / AAB
-- 本地服务器配置
-- Android 签名密钥
-
-项目已经提供 `.gitignore` 处理常见情况。
-
-## 版本
-
-当前移动端版本：**0.2.5**
+`file_picker 13.x` 使用 `win32 6.x`，因此项目使用 `package_info_plus 10.2.2` 以避免与 Windows 平台依赖产生版本冲突。`package_info_plus 10.2.2` 要求 Flutter >=3.38.1、Java 17、AGP >=8.12.1；本项目已同步 Android 构建工具链。
