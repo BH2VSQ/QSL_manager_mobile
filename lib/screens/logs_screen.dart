@@ -91,8 +91,8 @@ class _LogsScreenState extends State<LogsScreen> {
     if (selected.isEmpty) return;
 
     final direction = initialDirection;
-    final fresh = selected.where((log) => direction == 'TC' ? log.qslSent.toUpperCase() != 'Y' : log.qslRcvd.toUpperCase() != 'Y').toList(growable: false);
-    final existing = selected.where((log) => direction == 'TC' ? log.qslSent.toUpperCase() == 'Y' : log.qslRcvd.toUpperCase() == 'Y').toList(growable: false);
+    final fresh = selected.where((log) => !_hasCardInDirection(log, direction)).toList(growable: false);
+    final existing = selected.where((log) => _hasCardInDirection(log, direction)).toList(growable: false);
 
     // Logs that already carry a card in this direction go straight to reprint.
     if (existing.isNotEmpty) {
@@ -103,6 +103,15 @@ class _LogsScreenState extends State<LogsScreen> {
     if (fresh.isNotEmpty) {
       await _generateNewCards(fresh, direction);
     }
+  }
+
+  /// A log "has a card" in [direction] when it carries a QSL card of that
+  /// direction, or its ADIF sent/rcvd flag is already 'Y'. The list endpoint
+  /// does not always attach `qsl_cards`, so both signals are consulted.
+  bool _hasCardInDirection(QsoLog log, String direction) {
+    final flagged = direction == 'TC' ? log.qslSent.toUpperCase() == 'Y' : log.qslRcvd.toUpperCase() == 'Y';
+    if (flagged) return true;
+    return log.qslCards.any((c) => c.qslId.isNotEmpty && (c.direction.isEmpty || c.direction == direction));
   }
 
   Future<void> _generateNewCards(List<QsoLog> fresh, String direction) async {
@@ -207,31 +216,43 @@ class _LogsScreenState extends State<LogsScreen> {
   }
 
   Future<void> _reprintExisting(List<QsoLog> existing, String direction) async {
-    // Gather the unique card ids carried by the selected logs.
+    // Resolve the card id(s) carried by each selected log. The list endpoint
+    // does not always include `qsl_cards`, so fall back to the by-log endpoint
+    // when a log is flagged but has no card data attached.
     final qslIds = <String>{};
     for (final log in existing) {
-      for (final card in log.qslCards) {
-        if (card.qslId.isEmpty) continue;
-        if (card.direction.isNotEmpty && card.direction != direction) continue;
-        qslIds.add(card.qslId);
+      final cards = await _cardsForLogInDirection(log, direction);
+      for (final card in cards) {
+        if (card.qslId.isNotEmpty) qslIds.add(card.qslId);
       }
     }
-    if (qslIds.isEmpty) return;
+    if (qslIds.isEmpty) {
+      if (mounted) {
+        final label = direction == 'TC' ? '发卡' : '收卡';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('所选日志已有$label编号，但未读取到编号信息，请在卡片管理中补打')));
+      }
+      return;
+    }
 
-    // Fetch every QSO on each card so the dialog can show them and we send the
-    // correct log ids to the print queue.
-    final entries = <({String qslId, List<QsoLog> logs})>[];
+    // Fetch every QSO on each card so the dialog can show them (including the
+    // other QSOs on a multi-QSO card) and we send the correct log ids to the
+    // print queue.
+    final entries = <({String qslId, List<int> logIds, List<QsoLog> logs})>[];
     for (final qslId in qslIds) {
       List<QsoLog> cardLogs = const [];
+      List<int> cardLogIds = const [];
       try {
-        cardLogs = await widget.controller.api.logsForCard(qslId);
+        final card = await widget.controller.api.getCard(qslId);
+        cardLogIds = card.logIds;
+        cardLogs = card.logs.map((e) => QsoLog.fromJson(e)).toList(growable: false);
       } catch (_) {
         // Fall through to the selected logs below.
       }
       if (cardLogs.isEmpty) {
         cardLogs = existing.where((l) => l.qslCards.any((c) => c.qslId == qslId)).toList(growable: false);
+        cardLogIds = cardLogs.map((l) => l.id).toList(growable: false);
       }
-      entries.add((qslId: qslId, logs: cardLogs));
+      entries.add((qslId: qslId, logIds: cardLogIds, logs: cardLogs));
     }
 
     final confirm = await _showReprintDialog(entries, direction);
@@ -239,7 +260,7 @@ class _LogsScreenState extends State<LogsScreen> {
 
     var count = 0;
     for (final entry in entries) {
-      final logIds = entry.logs.map((l) => l.id).toList(growable: false);
+      final logIds = entry.logIds;
       if (logIds.isEmpty) continue;
       try {
         await widget.controller.api.addPrintQueue(
@@ -257,7 +278,22 @@ class _LogsScreenState extends State<LogsScreen> {
     }
   }
 
-  Future<bool> _showReprintDialog(List<({String qslId, List<QsoLog> logs})> entries, String direction) async {
+  Future<List<QslCard>> _cardsForLogInDirection(QsoLog log, String direction) async {
+    final local = log.qslCards
+        .where((c) => c.qslId.isNotEmpty && (c.direction.isEmpty || c.direction == direction))
+        .toList(growable: false);
+    if (local.isNotEmpty) return local;
+    try {
+      final fetched = await widget.controller.api.cardsForLog(log.id);
+      return fetched
+          .where((c) => c.qslId.isNotEmpty && (c.direction.isEmpty || c.direction == direction))
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<bool> _showReprintDialog(List<({String qslId, List<int> logIds, List<QsoLog> logs})> entries, String direction) async {
     final label = direction == 'TC' ? '发卡' : '收卡';
     final yes = await showDialog<bool>(
       context: context,
