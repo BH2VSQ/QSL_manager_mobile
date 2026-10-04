@@ -57,7 +57,7 @@ class _MoreScreenState extends State<MoreScreen> {
   Future<void> _showUpdateResult(UpdateCheckResult result) async {
     final release = result.release;
     if (release == null || !result.hasUpdate) {
-      await _showMessage('检查更新', '当前已是最新版本\n\n当前版本：${result.currentVersion}+${result.currentBuildNumber}');
+      await _showMessage('检查更新', '当前已是最新版本\n\n当前版本：${result.currentVersion}');
       return;
     }
 
@@ -223,7 +223,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('当前版本：${widget.result.currentVersion}+${widget.result.currentBuildNumber}', style: const TextStyle(fontSize: 10)),
+              Text('当前版本：${widget.result.currentVersion}', style: const TextStyle(fontSize: 10)),
               const SizedBox(height: 4),
               Text('最新版本：${release.versionWithBuild}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
               if (release.publishedAt != null) ...[

@@ -38,21 +38,46 @@ jobs:
 
       - name: Read application version
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          VERSION_LINE="$(grep -E '^version:[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+(\+[0-9]+)?[[:space:]]*$' pubspec.yaml | head -n 1)"
-          VERSION="$(printf '%s\n' "$VERSION_LINE" | sed -E 's/^version:[[:space:]]+//; s/[[:space:]]+$//')"
-          VERSION_NAME="${VERSION%%+*}"
-          BASE_BUILD="${VERSION#*+}"
-          if [[ "$BASE_BUILD" == "$VERSION" ]]; then
-            BASE_BUILD=0
+
+          # Determine the next semantic version by incrementing the latest
+          # release tag. Each segment is a single digit (0-9) that carries at
+          # 10, so 0.3.9 -> 0.4.0 and 0.9.9 -> 1.0.0.
+          LATEST_TAG="$(gh release list --limit 1 --json tagName --jq '.[0].tagName // ""' 2>/dev/null || true)"
+          LATEST_TAG="${LATEST_TAG#v}"
+
+          if [[ -n "$LATEST_TAG" ]]; then
+            # Drop any trailing +buildNumber left over from the previous scheme.
+            SEMVER="${LATEST_TAG%%+*}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$SEMVER"
+            PATCH=$(( ${PATCH:-0} + 1 ))
+            if (( PATCH >= 10 )); then
+              PATCH=0
+              MINOR=$(( ${MINOR:-0} + 1 ))
+            fi
+            if (( MINOR >= 10 )); then
+              MINOR=0
+              MAJOR=$(( ${MAJOR:-0} + 1 ))
+            fi
+          else
+            # No previous release: seed the version from pubspec.yaml.
+            VERSION_LINE="$(grep -E '^version:[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+(\+[0-9]+)?[[:space:]]*$' pubspec.yaml | head -n 1)"
+            VERSION="$(printf '%s\n' "$VERSION_LINE" | sed -E 's/^version:[[:space:]]+//; s/[[:space:]]+$//')"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION%%+*}"
           fi
-          BUILD_NUMBER=$((BASE_BUILD + GITHUB_RUN_NUMBER))
-          RELEASE_VERSION="${VERSION_NAME}+${BUILD_NUMBER}"
+
+          VERSION_NAME="${MAJOR}.${MINOR}.${PATCH}"
+
+          # Android versionCode must be a monotonically increasing integer.
+          BUILD_NUMBER=$(( MAJOR * 100 + MINOR * 10 + PATCH ))
+
+          RELEASE_VERSION="${VERSION_NAME}"
           APK_NAME="QSLMM-v${RELEASE_VERSION}.apk"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
-          echo "base_build=$BASE_BUILD" >> "$GITHUB_OUTPUT"
           echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "apk_name=$APK_NAME" >> "$GITHUB_OUTPUT"
