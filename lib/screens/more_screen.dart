@@ -195,7 +195,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
         title: const Text('需要允许安装未知应用'),
         content: Text(
           [
-            if (error != null) error,
+            ?error,
             'Android 需要允许 QSLMM 安装来自其他来源的 APK。请在系统设置中允许后，再返回本页面点击“安装更新”。',
           ].join('\n\n'),
           style: const TextStyle(fontSize: 11, height: 1.5),
@@ -321,7 +321,7 @@ class _ControlTile extends StatelessWidget {
               const SizedBox(height: 4),
               Text(detail, style: const TextStyle(fontSize: 8, color: AppPalette.textDim)),
             ])),
-            if (trailing != null) trailing!,
+            ?trailing,
             if (trailing == null) const Icon(Icons.chevron_right, color: AppPalette.textDim),
           ]),
         ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../core/app_controller.dart';
 import '../core/app_theme.dart';
-import '../models/models.dart';
 import '../models/address_entry.dart';
 import '../widgets/console_widgets.dart';
 
@@ -100,7 +99,7 @@ class _AddressBookScreenState extends State<AddressBookScreen> {
       ),
       body: Column(children: [
         Padding(padding: const EdgeInsets.fromLTRB(14, 8, 14, 10), child: TextField(controller: search, textInputAction: TextInputAction.search, onSubmitted: (_) => _load(), decoration: const InputDecoration(hintText: '搜索：呼号 / 姓名', prefixIcon: Icon(Icons.search, size: 18)))),
-        Expanded(child: loading ? consoleProgress() : RefreshIndicator(onRefresh: _load, child: ListView.separated(padding: const EdgeInsets.fromLTRB(14, 0, 14, 14), itemCount: entries.length, separatorBuilder: (_, __) => const SizedBox(height: 8), itemBuilder: (_, index) { final entry = entries[index]; return InkWell(onTap: () => _edit(entry), child: ConsolePanel(child: Row(children: [const Icon(Icons.contacts_outlined, size: 20, color: AppPalette.cyan), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(entry.callsign, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)), const SizedBox(height: 4), Text('${entry.name}  /  ${entry.country}', style: const TextStyle(fontSize: 9, color: AppPalette.textDim)), const SizedBox(height: 4), Text(entry.address, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, height: 1.35))])), Row(mainAxisSize: MainAxisSize.min, children: [IconButton(onPressed: () => _printLabel(entry), tooltip: '推送地址标签打印', icon: const Icon(Icons.print_outlined, size: 19)), PopupMenuButton<String>(onSelected: (v) { if (v == 'delete') _delete(entry); }, itemBuilder: (_) => const [PopupMenuItem(value: 'delete', child: Text('删除'))], icon: const Icon(Icons.more_vert, size: 18))])]))); })))
+        Expanded(child: loading ? consoleProgress() : RefreshIndicator(onRefresh: _load, child: ListView.separated(padding: const EdgeInsets.fromLTRB(14, 0, 14, 14), itemCount: entries.length, separatorBuilder: (_, _) => const SizedBox(height: 8), itemBuilder: (_, index) { final entry = entries[index]; return InkWell(onTap: () => _edit(entry), child: ConsolePanel(child: Row(children: [const Icon(Icons.contacts_outlined, size: 20, color: AppPalette.cyan), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(entry.callsign, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)), const SizedBox(height: 4), Text('${entry.name}  /  ${entry.country}', style: const TextStyle(fontSize: 9, color: AppPalette.textDim)), const SizedBox(height: 4), Text(entry.address, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, height: 1.35))])), Row(mainAxisSize: MainAxisSize.min, children: [IconButton(onPressed: () => _printLabel(entry), tooltip: '推送地址标签打印', icon: const Icon(Icons.print_outlined, size: 19)), PopupMenuButton<String>(onSelected: (v) { if (v == 'delete') _delete(entry); }, itemBuilder: (_) => const [PopupMenuItem(value: 'delete', child: Text('删除'))], icon: const Icon(Icons.more_vert, size: 18))])]))); })))
       ]),
     );
   }
@@ -205,14 +204,14 @@ class _AddressPrintDirectionSheet extends StatelessWidget {
               style: const TextStyle(fontSize: 10, color: AppPalette.textDim),
             ),
             const SizedBox(height: 14),
-            _PrintDirectionOption(
+            const _PrintDirectionOption(
               direction: 'FROM',
               title: 'FROM（发自）',
               description: '将此地址作为寄件/发信地址打印',
               icon: Icons.outbox_outlined,
             ),
             const SizedBox(height: 10),
-            _PrintDirectionOption(
+            const _PrintDirectionOption(
               direction: 'TO',
               title: 'TO（发往）',
               description: '将此地址作为收件/目的地址打印',

@@ -38,7 +38,7 @@ String normalizeApiBaseUrl(String input) {
     path = '$path/api';
   }
 
-  return uri.replace(path: path, query: '', fragment: '').toString().replaceFirst(RegExp(r'/+$'), '');
+  return uri.replace(path: path, query: '', fragment: '').toString().replaceFirst(RegExp(r'[/?#]+$'), '');
 }
 
 class QslApiException implements Exception {

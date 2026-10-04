@@ -125,7 +125,7 @@ class _LogsScreenState extends State<LogsScreen> {
                   if (selected.length > 1) ...[
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      value: mode,
+                      initialValue: mode,
                       decoration: const InputDecoration(labelText: '编号方式'),
                       items: const [
                         DropdownMenuItem(value: 'single', child: Text('合并为一张卡（一个 QSL 编号）')),
@@ -142,7 +142,7 @@ class _LogsScreenState extends State<LogsScreen> {
                   if (direction == 'TC') ...[
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      value: qslMessage,
+                      initialValue: qslMessage,
                       decoration: const InputDecoration(labelText: '卡片消息'),
                       items: const [
                         DropdownMenuItem(value: 'PSE', child: Text('PSE QSL')),
@@ -264,7 +264,7 @@ class _LogsScreenState extends State<LogsScreen> {
                       : ListView.separated(
                           padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
                           itemCount: logs.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
                           itemBuilder: (context, index) {
                             final log = logs[index];
                             return _LogCard(

@@ -37,7 +37,7 @@ class GitHubReleaseInfo {
 
   String get version => normalizeVersion(tagName);
   int get buildNumber => parseBuildNumber(tagName);
-  String get versionWithBuild => buildNumber > 0 ? '${version}+$buildNumber' : version;
+  String get versionWithBuild => buildNumber > 0 ? '$version+$buildNumber' : version;
 
   GitHubReleaseAsset? get apkAsset {
     final apk = assets.where((asset) => asset.name.toLowerCase().endsWith('.apk')).toList(growable: false);

@@ -3,7 +3,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../core/app_controller.dart';
 import '../core/app_theme.dart';
-import 'address_book_screen.dart';
 import 'cards_screen.dart';
 import 'dashboard_screen.dart';
 import 'logs_screen.dart';
