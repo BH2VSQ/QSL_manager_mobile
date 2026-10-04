@@ -90,12 +90,27 @@ class _LogsScreenState extends State<LogsScreen> {
     final selected = logs.where((log) => selectedIds.contains(log.id)).toList(growable: false);
     if (selected.isEmpty) return;
 
-    final sameCallsign = selected.every((e) => e.stationCallsign.trim().toUpperCase() == selected.first.stationCallsign.trim().toUpperCase());
-    String direction = initialDirection;
-    String mode = selected.length > 1 ? (sameCallsign ? 'single' : 'multi') : 'multi';
+    final direction = initialDirection;
+    final fresh = selected.where((log) => direction == 'TC' ? log.qslSent.toUpperCase() != 'Y' : log.qslRcvd.toUpperCase() != 'Y').toList(growable: false);
+    final existing = selected.where((log) => direction == 'TC' ? log.qslSent.toUpperCase() == 'Y' : log.qslRcvd.toUpperCase() == 'Y').toList(growable: false);
+
+    // Logs that already carry a card in this direction go straight to reprint.
+    if (existing.isNotEmpty) {
+      await _reprintExisting(existing, direction);
+    }
+
+    // The rest get a freshly issued number.
+    if (fresh.isNotEmpty) {
+      await _generateNewCards(fresh, direction);
+    }
+  }
+
+  Future<void> _generateNewCards(List<QsoLog> fresh, String direction) async {
+    final sameCallsign = fresh.every((e) => e.stationCallsign.trim().toUpperCase() == fresh.first.stationCallsign.trim().toUpperCase());
+    String mode = fresh.length > 1 ? (sameCallsign ? 'single' : 'multi') : 'multi';
     String qslMessage = 'PSE';
 
-    final result = await showDialog<({String direction, String mode, String qslMessage})>(
+    final result = await showDialog<({String mode, String qslMessage})>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) {
@@ -105,12 +120,12 @@ class _LogsScreenState extends State<LogsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('已选择 ${selected.length} 条日志', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                  Text('将为 ${fresh.length} 条日志颁发编号', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
                   Text(
-                    selected.length > 1
-                        ? (sameCallsign ? '对方呼号：${selected.first.stationCallsign}' : '已选择多个不同呼号')
-                        : '对方呼号：${selected.first.stationCallsign}',
+                    fresh.length > 1
+                        ? (sameCallsign ? '对方呼号：${fresh.first.stationCallsign}' : '已选择多个不同呼号')
+                        : '对方呼号：${fresh.first.stationCallsign}',
                     style: const TextStyle(fontSize: 9, color: AppPalette.textDim),
                   ),
                   const SizedBox(height: 14),
@@ -122,7 +137,7 @@ class _LogsScreenState extends State<LogsScreen> {
                       Text(direction == 'TC' ? '发卡（TC）' : '收卡（RC）', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
                     ]),
                   ),
-                  if (selected.length > 1) ...[
+                  if (fresh.length > 1) ...[
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       initialValue: mode,
@@ -157,9 +172,9 @@ class _LogsScreenState extends State<LogsScreen> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('取消')),
               FilledButton(
-                onPressed: selected.length > 1 && mode == 'single' && !sameCallsign
+                onPressed: fresh.length > 1 && mode == 'single' && !sameCallsign
                     ? null
-                    : () => Navigator.pop(dialogContext, (direction: direction, mode: mode, qslMessage: qslMessage)),
+                    : () => Navigator.pop(dialogContext, (mode: mode, qslMessage: qslMessage)),
                 child: const Text('颁发编号'),
               ),
             ],
@@ -169,25 +184,11 @@ class _LogsScreenState extends State<LogsScreen> {
     );
     if (result == null) return;
 
-    final eligible = selected.where((log) => direction == 'TC' ? log.qslSent.toUpperCase() != 'Y' : log.qslRcvd.toUpperCase() != 'Y').toList(growable: false);
-    final skipped = selected.where((log) => direction == 'TC' ? log.qslSent.toUpperCase() == 'Y' : log.qslRcvd.toUpperCase() == 'Y').toList(growable: false);
-
-    // Logs that already carry a card in this direction: offer to reprint their
-    // label instead of silently dropping them.
-    if (skipped.isNotEmpty) {
-      final reprint = await _confirmReprint(skipped.length, direction);
-      if (reprint) {
-        await _reprintSkipped(skipped, direction, result.qslMessage);
-      }
-    }
-
-    if (eligible.isEmpty) return;
-
     setState(() => generating = true);
     try {
       final response = await widget.controller.api.generateCards(
-        logIds: eligible.map((e) => e.id).toList(growable: false),
-        direction: result.direction,
+        logIds: fresh.map((e) => e.id).toList(growable: false),
+        direction: direction,
         mode: result.mode,
         qslMessage: result.qslMessage,
       );
@@ -205,13 +206,89 @@ class _LogsScreenState extends State<LogsScreen> {
     }
   }
 
-  Future<bool> _confirmReprint(int count, String direction) async {
+  Future<void> _reprintExisting(List<QsoLog> existing, String direction) async {
+    // Gather the unique card ids carried by the selected logs.
+    final qslIds = <String>{};
+    for (final log in existing) {
+      for (final card in log.qslCards) {
+        if (card.qslId.isEmpty) continue;
+        if (card.direction.isNotEmpty && card.direction != direction) continue;
+        qslIds.add(card.qslId);
+      }
+    }
+    if (qslIds.isEmpty) return;
+
+    // Fetch every QSO on each card so the dialog can show them and we send the
+    // correct log ids to the print queue.
+    final entries = <({String qslId, List<QsoLog> logs})>[];
+    for (final qslId in qslIds) {
+      List<QsoLog> cardLogs = const [];
+      try {
+        cardLogs = await widget.controller.api.logsForCard(qslId);
+      } catch (_) {
+        // Fall through to the selected logs below.
+      }
+      if (cardLogs.isEmpty) {
+        cardLogs = existing.where((l) => l.qslCards.any((c) => c.qslId == qslId)).toList(growable: false);
+      }
+      entries.add((qslId: qslId, logs: cardLogs));
+    }
+
+    final confirm = await _showReprintDialog(entries, direction);
+    if (confirm != true || !mounted) return;
+
+    var count = 0;
+    for (final entry in entries) {
+      final logIds = entry.logs.map((l) => l.id).toList(growable: false);
+      if (logIds.isEmpty) continue;
+      try {
+        await widget.controller.api.addPrintQueue(
+          qslId: entry.qslId,
+          direction: direction,
+          logIds: logIds,
+        );
+        count++;
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('补打 ${entry.qslId} 失败：$e')));
+      }
+    }
+    if (mounted && count > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已将 $count 个标签加入打印队列')));
+    }
+  }
+
+  Future<bool> _showReprintDialog(List<({String qslId, List<QsoLog> logs})> entries, String direction) async {
     final label = direction == 'TC' ? '发卡' : '收卡';
     final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('已存在 QSL 编号'),
-        content: Text('$count 条日志已存在$label编号，是否需要补打标签？'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('以下 $label 编号已存在，是否需要补打标签？', style: const TextStyle(fontSize: 10, color: AppPalette.textDim)),
+              const SizedBox(height: 10),
+              for (final entry in entries) ...[
+                Text(entry.qslId, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppPalette.cyan)),
+                const SizedBox(height: 4),
+                if (entry.logs.isEmpty)
+                  const Text('（无关联 QSO 信息）', style: TextStyle(fontSize: 9, color: AppPalette.textDim))
+                else
+                  for (final log in entry.logs)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3, left: 8),
+                      child: Text(
+                        '· ${log.stationCallsign}  ${cleanDate(log.qsoDate)}  ${log.mode}',
+                        style: const TextStyle(fontSize: 9, color: AppPalette.textDim),
+                      ),
+                    ),
+                const SizedBox(height: 12),
+              ],
+            ],
+          ),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('暂不')),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('补打标签')),
@@ -219,30 +296,6 @@ class _LogsScreenState extends State<LogsScreen> {
       ),
     );
     return yes == true;
-  }
-
-  Future<void> _reprintSkipped(List<QsoLog> logs, String direction, String qslMessage) async {
-    final seen = <String>{};
-    var count = 0;
-    for (final log in logs) {
-      for (final card in log.qslCards) {
-        if (card.direction != direction || card.qslId.isEmpty || !seen.add(card.qslId)) continue;
-        try {
-          await widget.controller.api.addPrintQueue(
-            qslId: card.qslId,
-            direction: direction,
-            logIds: card.logIds,
-            qslMessage: qslMessage,
-          );
-          count++;
-        } catch (e) {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('补打 ${card.qslId} 失败：$e')));
-        }
-      }
-    }
-    if (mounted && count > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已将 $count 个标签加入打印队列')));
-    }
   }
 
   @override
