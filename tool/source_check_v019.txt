@@ -1,0 +1,3 @@
+Dart source structural check: PASS
+Scanner lifecycle: explicit controller start/stop
+QSL search: QR scan input enabled; status filter removed

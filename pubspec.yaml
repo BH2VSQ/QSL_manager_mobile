@@ -1,0 +1,24 @@
+name: qsl_manager_mobile
+description: Android mobile console for BH2VSQ QSLCard-Manager.
+publish_to: "none"
+version: 0.2.5+14
+
+environment:
+  sdk: ">=3.11.0 <4.0.0"
+  flutter: ">=3.41.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.6.0
+  shared_preferences: ^2.5.5
+  mobile_scanner: ^7.4.2
+  file_picker: ^13.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
