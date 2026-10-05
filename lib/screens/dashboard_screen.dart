@@ -102,10 +102,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            MetricTile(
-              label: '待处理',
-              value: stats == null ? null : stats!.pendingOut + stats!.pendingIn,
-              accent: AppPalette.pink,
+            Row(
+              children: [
+                Expanded(child: MetricTile(label: '待出库', value: stats?.pendingOut, accent: AppPalette.pink)),
+                const SizedBox(width: 8),
+                Expanded(child: MetricTile(label: '待入库', value: stats?.pendingIn)),
+              ],
             ),
           ],
           const SizedBox(height: 16),
