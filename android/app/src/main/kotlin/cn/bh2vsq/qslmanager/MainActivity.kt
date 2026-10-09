@@ -208,15 +208,14 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
 
             val message = when (mode) {
                 // URI first so a device without QSLMM opens the query URL in the
-                // browser, followed by an identity record carrying this app's
-                // package name and signing certificate so QSLMM can verify the
-                // tag on a later scan.
-                "write" -> NdefMessage(
-                    arrayOf(
-                        NdefRecord.createUri(url ?: ""),
-                        buildIdentityRecord()
-                    )
-                )
+                // browser. NTAG tags also carry an identity record (package name
+                // + signing certificate) so QSLMM can verify them on a later
+                // scan; MIFARE Classic (SAK08) tags get the URI only.
+                "write" -> {
+                    val records = mutableListOf(NdefRecord.createUri(url ?: ""))
+                    if (isNtag(tag)) records.add(buildIdentityRecord())
+                    NdefMessage(records.toTypedArray())
+                }
                 // A single empty record is a valid NDEF message and clears the
                 // tag; NdefMessage() with zero records throws "must have at
                 // least one record".
@@ -323,10 +322,18 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
         Thread.sleep(5)
     }
 
+    /// True only for NTAG/Ultralight (SAK 0x00) tags, which support the password
+    /// feature and the identity record. MIFARE Classic (SAK 0x08) is excluded so
+    /// the password code never touches it.
+    private fun isNtag(tag: Tag): Boolean {
+        if (MifareUltralight.get(tag) == null) return false
+        return NfcA.get(tag)?.sak?.toInt()?.and(0xFF) == 0x00
+    }
+
     /// Applies the password to an NTAG after the NDEF payload has been written,
     /// so the data pages cannot be rewritten without authenticating first.
     private fun protectTag(tag: Tag, password: String) {
-        if (MifareUltralight.get(tag) == null) return // not an NTAG/Ultralight
+        if (!isNtag(tag)) return
         val nfcA = NfcA.get(tag) ?: return
         nfcA.connect()
         try {
@@ -344,7 +351,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     /// Removes NTAG password protection before formatting. Throws a descriptive
     /// error when the tag is protected but the password is missing or wrong.
     private fun unprotectTag(tag: Tag, password: String) {
-        if (MifareUltralight.get(tag) == null) return // not an NTAG/Ultralight
+        if (!isNtag(tag)) return
         val nfcA = NfcA.get(tag) ?: return
         nfcA.connect()
         try {
