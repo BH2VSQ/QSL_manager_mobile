@@ -63,7 +63,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     private val classicFormatKeyA = byteArrayOf(0xD3.toByte(), 0xF7.toByte(), 0xD3.toByte(), 0xF7.toByte(), 0xD3.toByte(), 0xF7.toByte())
     private val classicMadKey = byteArrayOf(0xA0.toByte(), 0xA1.toByte(), 0xA2.toByte(), 0xA3.toByte(), 0xA4.toByte(), 0xA5.toByte())
     private val classicFactoryKey = ByteArray(6) { 0xFF.toByte() }
-    private val classicProtectAccess = byteArrayOf(0xF0.toByte(), 0xFF.toByte(), 0x00, 0x00)
+    private val classicProtectAccess = byteArrayOf(0xF8.toByte(), 0x7F.toByte(), 0x00, 0x00)
     private val classicFactoryAccess = byteArrayOf(0xFF.toByte(), 0x07, 0x80.toByte(), 0x69)
 
     override fun onCreate(savedInstanceState: Bundle?) {
