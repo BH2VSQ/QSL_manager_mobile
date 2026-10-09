@@ -17,8 +17,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController baseUrl;
   late final TextEditingController queryUrl;
-  late final TextEditingController nfcKeyA;
-  late final TextEditingController nfcKeyB;
+  late final TextEditingController nfcPassword;
   bool saving = false;
   bool savingQuery = false;
   NfcAvailability _nfcAvailability = NfcAvailability.notSupported;
@@ -28,8 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     baseUrl = TextEditingController(text: widget.controller.baseUrl);
     queryUrl = TextEditingController(text: widget.controller.queryBaseUrl);
-    nfcKeyA = TextEditingController(text: widget.controller.nfcKeyA);
-    nfcKeyB = TextEditingController(text: widget.controller.nfcKeyB);
+    nfcPassword = TextEditingController(text: widget.controller.nfcPassword);
     _checkNfc();
   }
 
@@ -66,20 +64,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _saveNfcKeys() async {
-    await widget.controller.setNfcKeyA(nfcKeyA.text);
-    await widget.controller.setNfcKeyB(nfcKeyB.text);
-    nfcKeyA.text = widget.controller.nfcKeyA;
-    nfcKeyB.text = widget.controller.nfcKeyB;
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('标签密钥已保存')));
+  Future<void> _saveNfcPassword() async {
+    await widget.controller.setNfcPassword(nfcPassword.text);
+    nfcPassword.text = widget.controller.nfcPassword;
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('标签密码已保存')));
   }
 
   @override
   void dispose() {
     baseUrl.dispose();
     queryUrl.dispose();
-    nfcKeyA.dispose();
-    nfcKeyB.dispose();
+    nfcPassword.dispose();
     super.dispose();
   }
 
@@ -237,28 +232,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                const SectionHeader(label: '标签密钥'),
+                const SectionHeader(label: '标签密码'),
                 const SizedBox(height: 11),
                 TextField(
-                  controller: nfcKeyA,
+                  controller: nfcPassword,
                   autocorrect: false,
                   decoration: const InputDecoration(
-                    labelText: 'A 密钥（6 字节）',
-                    hintText: '例如 123456 或 A1B2C3D4E5F6',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: nfcKeyB,
-                  autocorrect: false,
-                  decoration: const InputDecoration(
-                    labelText: 'B 密钥（6 字节）',
-                    hintText: 'MIFARE Classic 写入密钥，可留空',
+                    labelText: '标签密码（可留空）',
+                    hintText: '任意长度，例如 123456',
                   ),
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'NTAG 用 A 密钥防篡改（取前 4 字节）；MIFARE Classic 用 A/B 作为扇区密钥，写入需 B 密钥。密钥最多 6 字节；留空表示不设密码。',
+                  '写入后自动设密码防篡改（不影响读取）；格式化时自动解除。NTAG 取前 4 字节、MIFARE Classic 取前 6 字节；留空表示不设密码。',
                   style: TextStyle(fontSize: 9, color: AppPalette.textDim, height: 1.5),
                 ),
                 const SizedBox(height: 10),
@@ -266,9 +252,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton.icon(
-                      onPressed: _saveNfcKeys,
+                      onPressed: _saveNfcPassword,
                       icon: const Icon(Icons.save_outlined, size: 16),
-                      label: const Text('保存密钥'),
+                      label: const Text('保存密码'),
                     ),
                   ],
                 ),

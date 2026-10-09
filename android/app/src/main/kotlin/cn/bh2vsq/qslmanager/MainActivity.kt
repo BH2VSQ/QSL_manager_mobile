@@ -55,7 +55,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     private val classicFormatKeyA = byteArrayOf(0xD3.toByte(), 0xF7.toByte(), 0xD3.toByte(), 0xF7.toByte(), 0xD3.toByte(), 0xF7.toByte())
     private val classicMadKey = byteArrayOf(0xA0.toByte(), 0xA1.toByte(), 0xA2.toByte(), 0xA3.toByte(), 0xA4.toByte(), 0xA5.toByte())
     private val classicFactoryKey = ByteArray(6) { 0xFF.toByte() }
-    private val classicProtectAccess = byteArrayOf(0x87.toByte(), 0x8F.toByte(), 0x07, 0x00)
+    private val classicProtectAccess = byteArrayOf(0xF0.toByte(), 0xFF.toByte(), 0x00, 0x00)
     private val classicFactoryAccess = byteArrayOf(0xFF.toByte(), 0x07, 0x80.toByte(), 0x69)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -150,14 +150,12 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
                 }
                 "startNfcWrite" -> {
                     val url = call.argument<String>("url") ?: ""
-                    val keyA = call.argument<String>("keyA") ?: ""
-                    val keyB = call.argument<String>("keyB") ?: ""
-                    startNfcOperation("write", url, keyA, keyB, result)
+                    val password = call.argument<String>("password") ?: ""
+                    startNfcOperation("write", url, password, result)
                 }
                 "startNfcFormat" -> {
-                    val keyA = call.argument<String>("keyA") ?: ""
-                    val keyB = call.argument<String>("keyB") ?: ""
-                    startNfcOperation("format", null, keyA, keyB, result)
+                    val password = call.argument<String>("password") ?: ""
+                    startNfcOperation("format", null, password, result)
                 }
                 "stopNfc" -> {
                     stopNfc()
@@ -183,7 +181,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
         }
     }
 
-    private fun startNfcOperation(mode: String, url: String?, keyA: String, keyB: String, result: MethodChannel.Result) {
+    private fun startNfcOperation(mode: String, url: String?, password: String, result: MethodChannel.Result) {
         val adapter = NfcAdapter.getDefaultAdapter(this)
         if (adapter == null) {
             result.error("NFC_UNSUPPORTED", "NFC not supported", null)
@@ -204,21 +202,21 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
             NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS
 
         adapter.enableReaderMode(this, { tag ->
-            nfcHandler?.post { writeTag(tag, mode, url, keyA, keyB) }
+            nfcHandler?.post { writeTag(tag, mode, url, password) }
         }, flags, null)
 
         result.success(null)
     }
 
-    private fun writeTag(tag: Tag, mode: String, url: String?, keyA: String, keyB: String) {
+    private fun writeTag(tag: Tag, mode: String, url: String?, password: String) {
         try {
             // For formatting, drop any password protection first so the empty
             // record below can be written back to a protected tag.
             if (mode == "format") {
                 if (MifareClassic.get(tag) != null) {
-                    unprotectClassic(tag, keyB)
+                    unprotectClassic(tag, password)
                 } else {
-                    unprotectTag(tag, keyA)
+                    unprotectTag(tag, password)
                 }
             }
 
@@ -270,12 +268,12 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
                 // rewritten without authenticating first. A password failure
                 // does not discard the data that was just written.
                 var protectFailed: String? = null
-                if (mode == "write" && keyA.isNotEmpty()) {
+                if (mode == "write" && password.isNotEmpty()) {
                     try {
                         if (MifareClassic.get(tag) != null) {
-                            protectClassic(tag, keyA, keyB)
+                            protectClassic(tag, password)
                         } else {
-                            protectTag(tag, keyA)
+                            protectTag(tag, password)
                         }
                     } catch (e: Exception) {
                         protectFailed = "数据已写入，但设置密码失败：${e.message ?: e.toString()}"
@@ -353,13 +351,13 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
 
     /// Applies the password to an NTAG after the NDEF payload has been written,
     /// so the data pages cannot be rewritten without authenticating first.
-    private fun protectTag(tag: Tag, keyA: String) {
+    private fun protectTag(tag: Tag, password: String) {
         if (!isNtag(tag)) return
         val nfcA = NfcA.get(tag) ?: return
         nfcA.connect()
         try {
             val cfg = readNtagConfig(nfcA) ?: return
-            val pwd = passwordTo6Bytes(keyA).copyOf(4)
+            val pwd = passwordTo6Bytes(password).copyOf(4)
             writeNtagPage(nfcA, cfg.pwd, pwd)                         // PWD
             writeNtagPage(nfcA, cfg.pack, ByteArray(4))               // PACK (RFUI = 0)
             writeNtagPage(nfcA, cfg.cfg0, byteArrayOf(0, 0, 0, 0))    // AUTH0 = 0x00
@@ -371,7 +369,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
 
     /// Removes NTAG password protection before formatting. Throws a descriptive
     /// error when the tag is protected but the password is missing or wrong.
-    private fun unprotectTag(tag: Tag, keyA: String) {
+    private fun unprotectTag(tag: Tag, password: String) {
         if (!isNtag(tag)) return
         val nfcA = NfcA.get(tag) ?: return
         nfcA.connect()
@@ -382,10 +380,10 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
             val auth0 = cfgResp.getOrNull(3)?.toInt()?.and(0xFF) ?: return
             if (auth0 == 0xFF) return // already unprotected
 
-            if (keyA.isEmpty()) {
+            if (password.isEmpty()) {
                 throw Exception("标签已加密，请先在设置中填写标签密码")
             }
-            val pwd = passwordTo6Bytes(keyA).copyOf(4)
+            val pwd = passwordTo6Bytes(password).copyOf(4)
             val authed = try {
                 val pack = nfcA.transceive(byteArrayOf(0x1B.toByte(), pwd[0], pwd[1], pwd[2], pwd[3]))
                 pack != null && pack.size == 2
@@ -405,10 +403,9 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     /// Applies sector-level tamper protection to a MIFARE Classic tag: the NDEF
     /// payload stays readable via Key A while writing requires Key B. Sector 0
     /// (the MAD) is left untouched so Android can still locate the NDEF data.
-    private fun protectClassic(tag: Tag, keyA: String, keyB: String) {
+    private fun protectClassic(tag: Tag, password: String) {
         val mfc = MifareClassic.get(tag) ?: return
-        val keyABytes = passwordTo6Bytes(keyA)
-        val keyBBytes = passwordTo6Bytes(keyB)
+        val keyB = passwordTo6Bytes(password)
         Thread.sleep(50) // let the tag settle after the NDEF write
         mfc.connect()
         try {
@@ -416,7 +413,9 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
             for (sector in 1 until mfc.sectorCount) {
                 val trailerBlock = mfc.sectorToBlock(sector) + mfc.getBlockCountInSector(sector) - 1
                 if (!authenticateClassic(mfc, sector)) continue
-                mfc.writeBlock(trailerBlock, buildClassicTrailer(keyABytes, classicProtectAccess, keyBBytes))
+                // Keep Key A as the NDEF read key; Key B holds the password, so
+                // data stays readable but writing requires the password.
+                mfc.writeBlock(trailerBlock, buildClassicTrailer(classicFormatKeyA, classicProtectAccess, keyB))
                 changed = true
             }
             if (!changed) throw Exception("无法认证 MIFARE Classic 扇区，密钥未设置")
@@ -427,15 +426,15 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
 
     /// Removes the MIFARE Classic protection by authenticating with Key B and
     /// restoring the factory transport configuration.
-    private fun unprotectClassic(tag: Tag, keyB: String) {
+    private fun unprotectClassic(tag: Tag, password: String) {
         val mfc = MifareClassic.get(tag) ?: return
-        val keyBBytes = passwordTo6Bytes(keyB)
+        val keyB = passwordTo6Bytes(password)
         mfc.connect()
         try {
             for (sector in 1 until mfc.sectorCount) {
                 val trailerBlock = mfc.sectorToBlock(sector) + mfc.getBlockCountInSector(sector) - 1
-                if (!mfc.authenticateSectorWithKeyB(sector, keyBBytes)) continue
-                mfc.writeBlock(trailerBlock, buildClassicTrailer(classicFactoryKey, classicFactoryAccess, classicFactoryKey))
+                if (!mfc.authenticateSectorWithKeyB(sector, keyB)) continue
+                mfc.writeBlock(trailerBlock, buildClassicTrailer(classicFormatKeyA, classicFactoryAccess, classicFormatKeyA))
             }
         } finally {
             mfc.close()
