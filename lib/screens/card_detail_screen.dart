@@ -139,6 +139,7 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
           title: '写入 NFC',
           instruction: '请将 NFC 标签靠近手机背部\n写入卡片 ${current.qslId} 的查询链接',
           url: url,
+          password: widget.controller.nfcPassword,
           successMessage: '写入成功：${current.qslId}',
         ),
       ),

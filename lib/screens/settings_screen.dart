@@ -17,6 +17,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController baseUrl;
   late final TextEditingController queryUrl;
+  late final TextEditingController nfcPassword;
   bool saving = false;
   bool savingQuery = false;
   NfcAvailability _nfcAvailability = NfcAvailability.notSupported;
@@ -26,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     baseUrl = TextEditingController(text: widget.controller.baseUrl);
     queryUrl = TextEditingController(text: widget.controller.queryBaseUrl);
+    nfcPassword = TextEditingController(text: widget.controller.nfcPassword);
     _checkNfc();
   }
 
@@ -62,10 +64,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _saveNfcPassword() async {
+    await widget.controller.setNfcPassword(nfcPassword.text);
+    nfcPassword.text = widget.controller.nfcPassword;
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('标签密码已保存')));
+  }
+
   @override
   void dispose() {
     baseUrl.dispose();
     queryUrl.dispose();
+    nfcPassword.dispose();
     super.dispose();
   }
 
@@ -219,6 +228,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onPressed: savingQuery ? null : _saveQueryUrl,
                       icon: const Icon(Icons.save_outlined, size: 16),
                       label: Text(savingQuery ? '保存中…' : '保存查询地址'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const SectionHeader(label: '标签密码'),
+                const SizedBox(height: 11),
+                TextField(
+                  controller: nfcPassword,
+                  autocorrect: false,
+                  decoration: const InputDecoration(
+                    labelText: 'NTAG 密码（可留空）',
+                    hintText: '例如 1234 或 A1B2C3D4',
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  '写入标签后自动设置密码防止篡改；格式化时自动解除。密码取前 4 个字节；留空表示不设密码。',
+                  style: TextStyle(fontSize: 9, color: AppPalette.textDim, height: 1.5),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: _saveNfcPassword,
+                      icon: const Icon(Icons.save_outlined, size: 16),
+                      label: const Text('保存密码'),
                     ),
                   ],
                 ),

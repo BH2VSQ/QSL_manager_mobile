@@ -100,11 +100,12 @@ class _MoreScreenState extends State<MoreScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => const NfcTagScreen(
+                builder: (_) => NfcTagScreen(
                   mode: NfcTagMode.format,
                   title: 'Tag 格式化',
                   instruction: '将已写入数据的 Tag 贴至手机线圈处\n检测到标签后将自动清空',
                   successMessage: '格式化完毕',
+                  password: widget.controller.nfcPassword,
                 ),
               ),
             ),

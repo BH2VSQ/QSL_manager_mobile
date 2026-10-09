@@ -70,15 +70,15 @@ class NfcService {
       (await availability()) == NfcAvailability.available;
 
   /// Starts a one-shot write of a QSL query link (a bare web URI) to the next
-  /// tag brought near the phone.
-  static Future<void> writeQslTag({required String url}) async {
-    await _channel.invokeMethod<void>('startNfcWrite', {'url': url});
+  /// tag brought near the phone, then locks the tag with [password].
+  static Future<void> writeQslTag({required String url, required String password}) async {
+    await _channel.invokeMethod<void>('startNfcWrite', {'url': url, 'password': password});
   }
 
   /// Starts a persistent clear/format session; each new tag is cleared until
-  /// [stop] is called.
-  static Future<void> formatTag() async {
-    await _channel.invokeMethod<void>('startNfcFormat');
+  /// [stop] is called. A protected tag is unlocked with [password] first.
+  static Future<void> formatTag({required String password}) async {
+    await _channel.invokeMethod<void>('startNfcFormat', {'password': password});
   }
 
   /// Stops the current write/format session.

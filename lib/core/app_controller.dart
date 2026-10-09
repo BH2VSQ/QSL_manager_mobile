@@ -10,6 +10,7 @@ class AppController extends ChangeNotifier {
   static const _darkModeKey = 'dark_mode';
   static const _nfcEnabledKey = 'nfc_enabled';
   static const _queryBaseUrlKey = 'nfc_query_base_url';
+  static const _nfcPasswordKey = 'nfc_password';
 
   final SharedPreferencesAsync preferences;
   final QslApi api;
@@ -22,6 +23,7 @@ class AppController extends ChangeNotifier {
   int connectionRevision = 0;
   bool nfcEnabled = false;
   String queryBaseUrl = '';
+  String nfcPassword = '';
 
   static Future<AppController> create() async {
     final prefs = SharedPreferencesAsync();
@@ -30,6 +32,7 @@ class AppController extends ChangeNotifier {
     final darkMode = await prefs.getBool(_darkModeKey) ?? true;
     final nfcEnabled = await prefs.getBool(_nfcEnabledKey) ?? false;
     final queryBaseUrl = await prefs.getString(_queryBaseUrlKey) ?? '';
+    final nfcPassword = await prefs.getString(_nfcPasswordKey) ?? '';
     return AppController(
       preferences: prefs,
       api: QslApi(baseUrl: baseUrl),
@@ -37,7 +40,8 @@ class AppController extends ChangeNotifier {
       ..baseUrl = baseUrl
       ..darkMode = darkMode
       ..nfcEnabled = nfcEnabled
-      ..queryBaseUrl = queryBaseUrl;
+      ..queryBaseUrl = queryBaseUrl
+      ..nfcPassword = nfcPassword;
   }
 
   Future<void> setBaseUrl(String value) async {
@@ -70,6 +74,12 @@ class AppController extends ChangeNotifier {
   Future<void> setQueryBaseUrl(String value) async {
     queryBaseUrl = value.trim().replaceFirst(RegExp(r'/+$'), '');
     await preferences.setString(_queryBaseUrlKey, queryBaseUrl);
+    notifyListeners();
+  }
+
+  Future<void> setNfcPassword(String value) async {
+    nfcPassword = value.trim();
+    await preferences.setString(_nfcPasswordKey, nfcPassword);
     notifyListeners();
   }
 
