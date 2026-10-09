@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../core/app_controller.dart';
 import '../core/app_theme.dart';
+import '../services/nfc_service.dart';
+import 'card_detail_screen.dart';
 import 'cards_screen.dart';
 import 'dashboard_screen.dart';
 import 'logs_screen.dart';
@@ -19,7 +23,7 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int index = 0;
   late final MobileScannerController _scannerController = MobileScannerController(
     autoStart: false,
@@ -32,6 +36,35 @@ class _AppShellState extends State<AppShell> {
   final List<int> _refreshTokens = List<int>.filled(5, 0);
 
   DateTime? _lastBackPressed;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkNfcLaunch());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_checkNfcLaunch());
+    }
+  }
+
+  /// Handles a URI delivered by scanning a previously-written NFC tag. When
+  /// QSLMM is installed, the tag's Android Application Record routes the scan
+  /// here instead of the browser; the `q` query parameter holds the QSL id.
+  Future<void> _checkNfcLaunch() async {
+    final uri = await NfcService.consumeLaunchUri();
+    if (!mounted || uri == null || uri.isEmpty) return;
+    final qslId = Uri.tryParse(uri)?.queryParameters['q']?.trim();
+    if (qslId == null || qslId.isEmpty) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CardDetailScreen(controller: widget.controller, qslId: qslId),
+      ),
+    );
+  }
 
   Future<void> _selectTab(int value) async {
     if (value < 0 || value >= _refreshTokens.length || value == index) return;
@@ -76,6 +109,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scannerTabActive.dispose();
     _scannerController.dispose();
     super.dispose();

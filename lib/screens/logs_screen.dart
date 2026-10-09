@@ -293,6 +293,13 @@ class _LogsScreenState extends State<LogsScreen> {
     }
   }
 
+  String _logTime(String value) {
+    if (value.isEmpty) return '—';
+    final normalized = value.padLeft(6, '0');
+    if (normalized.length == 6) return '${normalized.substring(0, 2)}:${normalized.substring(2, 4)}:${normalized.substring(4, 6)}';
+    return value;
+  }
+
   Future<bool> _showReprintDialog(List<({String qslId, List<int> logIds, List<QsoLog> logs})> entries, String direction) async {
     final label = direction == 'TC' ? '发卡' : '收卡';
     final yes = await showDialog<bool>(
@@ -316,7 +323,7 @@ class _LogsScreenState extends State<LogsScreen> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 3, left: 8),
                       child: Text(
-                        '· ${log.stationCallsign}  ${cleanDate(log.qsoDate)}  ${log.mode}',
+                        '· ${log.stationCallsign}  ${cleanDate(log.qsoDate)} ${_logTime(log.timeOn)}  ${log.mode}${log.satName.isNotEmpty ? ' · ${log.satName}' : ''}',
                         style: const TextStyle(fontSize: 9, color: AppPalette.textDim),
                       ),
                     ),
@@ -472,6 +479,11 @@ class _LogCard extends StatelessWidget {
                     Text(log.mode.isEmpty ? '—' : log.mode, style: const TextStyle(fontSize: 9)),
                     Text('${log.rstSent.isEmpty ? '—' : log.rstSent}/${log.rstRcvd.isEmpty ? '—' : log.rstRcvd}', style: const TextStyle(fontSize: 9)),
                   ]),
+                  if (log.satName.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 5),
+                      child: Text('SAT: ${log.satName}', style: const TextStyle(fontSize: 9, color: AppPalette.cyan, fontWeight: FontWeight.w700)),
+                    ),
                 ]),
               ),
               const SizedBox(width: 8),

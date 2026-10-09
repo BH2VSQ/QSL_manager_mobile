@@ -57,38 +57,6 @@ class _CardsScreenState extends State<CardsScreen> {
     await _search();
   }
 
-  Future<void> _reprint(QslCard card) async {
-    String qslMessage = 'PSE';
-    if (card.direction == 'TC') {
-      final chosen = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('选择补打内容'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(title: const Text('PSE QSL'), subtitle: const Text('请对方回卡'), onTap: () => Navigator.pop(context, 'PSE')),
-              ListTile(title: const Text('QSL TNX'), subtitle: const Text('感谢对方回卡'), onTap: () => Navigator.pop(context, 'TNX')),
-            ],
-          ),
-        ),
-      );
-      if (chosen == null) return;
-      qslMessage = chosen;
-    }
-    try {
-      await widget.controller.api.addPrintQueue(
-        qslId: card.qslId,
-        direction: card.direction,
-        logIds: card.logIds,
-        qslMessage: qslMessage,
-      );
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已加入服务器打印队列')));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('补打失败：$e')));
-    }
-  }
-
   String _statusText(QslCard card) {
     switch (card.status) {
       case 'pending':
@@ -174,7 +142,6 @@ class _CardsScreenState extends State<CardsScreen> {
                               card: card,
                               statusText: _statusText(card),
                               onOpen: () => _openCard(card),
-                              onReprint: () => _reprint(card),
                             );
                           },
                         ),
@@ -186,12 +153,11 @@ class _CardsScreenState extends State<CardsScreen> {
 }
 
 class _CardRow extends StatelessWidget {
-  const _CardRow({required this.card, required this.statusText, required this.onOpen, required this.onReprint});
+  const _CardRow({required this.card, required this.statusText, required this.onOpen});
 
   final QslCard card;
   final String statusText;
   final VoidCallback onOpen;
-  final VoidCallback onReprint;
 
   @override
   Widget build(BuildContext context) {
@@ -230,7 +196,6 @@ class _CardRow extends StatelessWidget {
                   ],
                 ),
               ),
-              IconButton(onPressed: onReprint, tooltip: '补打', icon: const Icon(Icons.print_outlined, size: 19)),
               const Icon(Icons.chevron_right, size: 17, color: AppPalette.textDim),
             ],
           ),

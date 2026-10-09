@@ -4,6 +4,7 @@ import '../core/app_controller.dart';
 import '../core/app_theme.dart';
 import '../models/models.dart';
 import '../widgets/console_widgets.dart';
+import 'card_detail_screen.dart';
 
 class LogDetailScreen extends StatefulWidget {
   const LogDetailScreen({super.key, required this.controller, required this.logId});
@@ -173,6 +174,14 @@ class _LogDetailScreenState extends State<LogDetailScreen> {
     return card.status.isEmpty ? '—' : card.status;
   }
 
+  Future<void> _openCard(String qslId) async {
+    if (qslId.isEmpty) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => CardDetailScreen(controller: widget.controller, qslId: qslId)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final current = log;
@@ -295,10 +304,20 @@ class _LogDetailScreenState extends State<LogDetailScreen> {
                             else
                               ...current.qslCards.map((card) => Padding(
                                     padding: const EdgeInsets.only(bottom: 8),
-                                    child: Row(children: [
-                                      Expanded(child: Text(card.qslId, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700))),
-                                      StatusTag(_qslStatus(card), accent: card.direction == 'TC' ? AppPalette.cyan : AppPalette.pink),
-                                    ]),
+                                    child: InkWell(
+                                      onTap: () => _openCard(card.qslId),
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Row(children: [
+                                        Expanded(
+                                          child: Row(children: [
+                                            Flexible(child: Text(card.qslId, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppPalette.cyan))),
+                                            const SizedBox(width: 6),
+                                            const Icon(Icons.open_in_new, size: 14, color: AppPalette.textDim),
+                                          ]),
+                                        ),
+                                        StatusTag(_qslStatus(card), accent: card.direction == 'TC' ? AppPalette.cyan : AppPalette.pink),
+                                      ]),
+                                    ),
                                   )),
                           ]),
                         ),

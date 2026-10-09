@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_nfc_kit/flutter_nfc_kit.dart';
 
 import '../core/app_controller.dart';
 import '../core/app_theme.dart';
+import '../services/nfc_service.dart';
 import '../widgets/console_widgets.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -15,12 +17,22 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController baseUrl;
+  late final TextEditingController queryUrl;
   bool saving = false;
+  bool savingQuery = false;
+  NFCAvailability _nfcAvailability = NFCAvailability.not_supported;
 
   @override
   void initState() {
     super.initState();
     baseUrl = TextEditingController(text: widget.controller.baseUrl);
+    queryUrl = TextEditingController(text: widget.controller.queryBaseUrl);
+    _checkNfc();
+  }
+
+  Future<void> _checkNfc() async {
+    final availability = await NfcService.availability();
+    if (mounted) setState(() => _nfcAvailability = availability);
   }
 
   Future<void> _save() async {
@@ -40,9 +52,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _saveQueryUrl() async {
+    setState(() => savingQuery = true);
+    try {
+      await widget.controller.setQueryBaseUrl(queryUrl.text);
+      queryUrl.text = widget.controller.queryBaseUrl;
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('查询地址已保存')));
+    } finally {
+      if (mounted) setState(() => savingQuery = false);
+    }
+  }
+
   @override
   void dispose() {
     baseUrl.dispose();
+    queryUrl.dispose();
     super.dispose();
   }
 
@@ -142,6 +166,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text(widget.controller.darkMode ? '夜间模式' : '白天模式'),
                   subtitle: Text(widget.controller.darkMode ? '深色控制台配色，适合低光环境' : '浅色控制台配色，适合白天使用'),
                   secondary: Icon(widget.controller.darkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined, color: AppPalette.cyan),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          ConsolePanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionHeader(label: 'NFC 标签'),
+                const SizedBox(height: 6),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  value: widget.controller.nfcEnabled,
+                  onChanged: _nfcAvailability == NFCAvailability.not_supported
+                      ? null
+                      : (value) => widget.controller.setNfcEnabled(value),
+                  title: const Text('启用 NFC 写入'),
+                  subtitle: Text(
+                    _nfcAvailability == NFCAvailability.not_supported
+                        ? '此设备不支持 NFC'
+                        : _nfcAvailability == NFCAvailability.disabled
+                            ? 'NFC 已在系统设置中关闭'
+                            : '将 QSL 查询链接写入 NFC 标签',
+                  ),
+                  secondary: Icon(
+                    Icons.nfc,
+                    color: _nfcAvailability == NFCAvailability.not_supported ? AppPalette.textDim : AppPalette.cyan,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: queryUrl,
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                  decoration: const InputDecoration(
+                    labelText: '查询地址（主网址）',
+                    hintText: '例如 https://qsl.example.com',
+                  ),
+                  onSubmitted: (_) => _saveQueryUrl(),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  '写入 NFC 标签时会将卡片编号拼接到此网址（网址/?q=卡片编号）。收卡人未安装本客户端时将跳转该网页查询。',
+                  style: TextStyle(fontSize: 9, color: AppPalette.textDim, height: 1.5),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: savingQuery ? null : _saveQueryUrl,
+                      icon: const Icon(Icons.save_outlined, size: 16),
+                      label: Text(savingQuery ? '保存中…' : '保存查询地址'),
+                    ),
+                  ],
                 ),
               ],
             ),

@@ -1,12 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:ndef/ndef.dart' as ndef;
 
 import '../core/app_controller.dart';
 import '../core/app_theme.dart';
 import '../services/github_update_service.dart';
 import '../widgets/console_widgets.dart';
 import 'address_book_screen.dart';
+import 'nfc_tag_screen.dart';
 import 'settings_screen.dart';
 
 class MoreScreen extends StatefulWidget {
@@ -87,9 +89,29 @@ class _MoreScreenState extends State<MoreScreen> {
         _ControlTile(
           icon: Icons.settings_outlined,
           title: '设置',
-          detail: '服务器地址 / 连接诊断 / 显示模式',
+          detail: '服务器地址 / 连接诊断 / 显示模式 / NFC',
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen(controller: widget.controller))),
         ),
+        if (widget.controller.nfcEnabled) ...[
+          const SizedBox(height: 8),
+          _ControlTile(
+            icon: Icons.nfc,
+            title: 'Tag 格式化',
+            detail: '清空已写入数据的 NFC 标签',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const NfcTagScreen(
+                  title: 'Tag 格式化',
+                  instruction: '将已写入数据的 Tag 贴至手机线圈处\n检测到标签后将自动清空',
+                  records: <ndef.NDEFRecord>[],
+                  successMessage: '格式化完毕',
+                  repeat: true,
+                ),
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         _ControlTile(
           icon: Icons.system_update_outlined,

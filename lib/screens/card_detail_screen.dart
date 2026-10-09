@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/app_controller.dart';
 import '../core/app_theme.dart';
 import '../models/models.dart';
+import '../services/nfc_service.dart';
 import '../widgets/console_widgets.dart';
 import 'log_detail_screen.dart';
+import 'nfc_tag_screen.dart';
 
 class CardDetailScreen extends StatefulWidget {
   const CardDetailScreen({super.key, required this.controller, required this.qslId});
@@ -108,6 +111,45 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
     );
   }
 
+  Future<void> _writeNfc() async {
+    final current = card;
+    if (current == null || current.qslId.isEmpty) return;
+
+    if (!await NfcService.isNfcSupported()) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('此设备不支持 NFC')));
+      return;
+    }
+    if (!await NfcService.isNfcUsable()) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请在系统设置中开启 NFC 后重试')));
+      return;
+    }
+    final base = widget.controller.queryBaseUrl.trim();
+    if (base.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请先在“设置”中配置 NFC 查询地址')));
+      return;
+    }
+
+    final packageName = (await PackageInfo.fromPlatform()).packageName;
+    final message = NfcService.buildQslLinkMessage(
+      queryBaseUrl: base,
+      qslId: current.qslId,
+      packageName: packageName,
+    );
+
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NfcTagScreen(
+          title: '写入 NFC',
+          instruction: '请将 NFC 标签靠近手机背部\n写入卡片 ${current.qslId} 的查询链接',
+          records: message,
+          successMessage: '写入成功：${current.qslId}',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final current = card;
@@ -116,7 +158,6 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
         title: Text(current == null ? '卡片详情' : current.qslId),
         actions: [
           IconButton(onPressed: loading || reprinting ? null : _load, icon: const Icon(Icons.refresh_outlined)),
-          IconButton(onPressed: loading || reprinting || current == null ? null : _reprint, icon: const Icon(Icons.print_outlined)),
         ],
       ),
       body: loading
@@ -142,14 +183,23 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
                               _row('更新时间', current.updatedAt),
                               _row('关联日志', current.logCount.toString()),
                               const SizedBox(height: 10),
-                              SizedBox(
-                                width: double.infinity,
-                                child: FilledButton.icon(
-                                  onPressed: reprinting ? null : _reprint,
-                                  icon: reprinting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.print_outlined),
-                                  label: Text(reprinting ? '加入打印队列中…' : '补打标签'),
+                              Row(children: [
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    onPressed: reprinting ? null : _reprint,
+                                    icon: reprinting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.print_outlined),
+                                    label: Text(reprinting ? '打印队列中…' : '补打标签'),
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: reprinting || current.qslId.isEmpty ? null : _writeNfc,
+                                    icon: const Icon(Icons.nfc, size: 18),
+                                    label: const Text('写入NFC'),
+                                  ),
+                                ),
+                              ]),
                             ]),
                           ),
                           const SizedBox(height: 12),

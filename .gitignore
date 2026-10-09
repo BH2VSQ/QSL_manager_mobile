@@ -15,6 +15,7 @@ coverage/
 
 # Android generated/signing files
 android/.gradle/
+android/.kotlin/
 android/key.properties
 *.jks
 *.keystore
