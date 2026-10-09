@@ -53,6 +53,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     // Key A and writable only via Key B; unprotectClassic restores the factory
     // transport configuration so the tag can be reformatted.
     private val classicFormatKeyA = byteArrayOf(0xD3.toByte(), 0xF7.toByte(), 0xD3.toByte(), 0xF7.toByte(), 0xD3.toByte(), 0xF7.toByte())
+    private val classicMadKey = byteArrayOf(0xA0.toByte(), 0xA1.toByte(), 0xA2.toByte(), 0xA3.toByte(), 0xA4.toByte(), 0xA5.toByte())
     private val classicFactoryKey = ByteArray(6) { 0xFF.toByte() }
     private val classicProtectAccess = byteArrayOf(0x87.toByte(), 0x8F.toByte(), 0x07, 0x00)
     private val classicFactoryAccess = byteArrayOf(0xFF.toByte(), 0x07, 0x80.toByte(), 0x69)
@@ -408,13 +409,17 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
         val mfc = MifareClassic.get(tag) ?: return
         val keyABytes = passwordTo6Bytes(keyA)
         val keyBBytes = passwordTo6Bytes(keyB)
+        Thread.sleep(50) // let the tag settle after the NDEF write
         mfc.connect()
         try {
+            var changed = false
             for (sector in 1 until mfc.sectorCount) {
                 val trailerBlock = mfc.sectorToBlock(sector) + mfc.getBlockCountInSector(sector) - 1
-                if (!authenticateClassicKeyA(mfc, sector)) continue
+                if (!authenticateClassic(mfc, sector)) continue
                 mfc.writeBlock(trailerBlock, buildClassicTrailer(keyABytes, classicProtectAccess, keyBBytes))
+                changed = true
             }
+            if (!changed) throw Exception("无法认证 MIFARE Classic 扇区，密钥未设置")
         } finally {
             mfc.close()
         }
@@ -437,11 +442,17 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
         }
     }
 
-    /// Authenticates a sector with Key A, trying the NDEF-format key first and
-    /// the factory default second.
-    private fun authenticateClassicKeyA(mfc: MifareClassic, sector: Int): Boolean =
-        mfc.authenticateSectorWithKeyA(sector, classicFormatKeyA) ||
-            mfc.authenticateSectorWithKeyA(sector, classicFactoryKey)
+    /// Authenticates a sector, trying the NDEF, MAD and factory keys on both Key
+    /// A and Key B so a freshly-formatted tag can be reached regardless of the
+    /// exact key layout the platform's NDEF formatter produced.
+    private fun authenticateClassic(mfc: MifareClassic, sector: Int): Boolean {
+        val keys = listOf(classicFormatKeyA, classicMadKey, classicFactoryKey)
+        for (key in keys) {
+            if (mfc.authenticateSectorWithKeyA(sector, key)) return true
+            if (mfc.authenticateSectorWithKeyB(sector, key)) return true
+        }
+        return false
+    }
 
     /// Builds a 16-byte MIFARE Classic sector trailer from key A, access bits
     /// (4 bytes) and key B.
