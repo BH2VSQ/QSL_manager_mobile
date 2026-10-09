@@ -63,7 +63,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     private val classicFormatKeyA = byteArrayOf(0xD3.toByte(), 0xF7.toByte(), 0xD3.toByte(), 0xF7.toByte(), 0xD3.toByte(), 0xF7.toByte())
     private val classicMadKey = byteArrayOf(0xA0.toByte(), 0xA1.toByte(), 0xA2.toByte(), 0xA3.toByte(), 0xA4.toByte(), 0xA5.toByte())
     private val classicFactoryKey = ByteArray(6) { 0xFF.toByte() }
-    private val classicProtectAccess = byteArrayOf(0xF8.toByte(), 0x7F.toByte(), 0x00, 0x00)
+    private val classicProtectAccess = byteArrayOf(0x78, 0x77, 0x88.toByte(), 0x00)
     private val classicFactoryAccess = byteArrayOf(0xFF.toByte(), 0x07, 0x80.toByte(), 0x69)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -352,11 +352,13 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     /// NTAG21x configuration-page addresses for a specific tag model.
     private data class NtagConfig(val cfg0: Int, val cfg1: Int, val pwd: Int, val pack: Int)
 
-    /// Derives the 6-byte key from the user-entered string (first six UTF-8
-    /// bytes, zero-padded). NTAG uses the first four bytes as its PWD; MIFARE
-    /// Classic uses all six bytes as a sector key.
-    private fun passwordTo6Bytes(key: String): ByteArray =
-        key.toByteArray(Charsets.UTF_8).copyOf(6)
+    /// Derives the key from the user-entered password using MD5, matching NFC
+    /// Tools. The first `length` bytes of the MD5 hash are used: 4 for NTAG's
+    /// PWD, 6 for a MIFARE Classic sector key.
+    private fun passwordToKey(password: String, length: Int): ByteArray =
+        MessageDigest.getInstance("MD5")
+            .digest(password.toByteArray(Charsets.UTF_8))
+            .copyOf(length)
 
     /// Reads the CC (capability container) to identify the NTAG model and return
     /// its configuration-page addresses, or null for an unknown tag.
@@ -402,7 +404,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
         nfcA.connect()
         try {
             val cfg = readNtagConfig(nfcA) ?: return
-            val pwd = passwordTo6Bytes(password).copyOf(4)
+            val pwd = passwordToKey(password, 4)
             writeNtagPage(nfcA, cfg.pwd, pwd)                         // PWD
             writeNtagPage(nfcA, cfg.pack, ByteArray(4))               // PACK (RFUI = 0)
             writeNtagPage(nfcA, cfg.cfg0, byteArrayOf(0, 0, 0, 0))    // AUTH0 = 0x00
@@ -428,7 +430,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
             if (password.isEmpty()) {
                 throw Exception("标签已加密，请先在设置中填写标签密码")
             }
-            val pwd = passwordTo6Bytes(password).copyOf(4)
+            val pwd = passwordToKey(password, 4)
             val authed = try {
                 val pack = nfcA.transceive(byteArrayOf(0x1B.toByte(), pwd[0], pwd[1], pwd[2], pwd[3]))
                 pack != null && pack.size == 2
@@ -450,7 +452,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     /// (the MAD) is left untouched so Android can still locate the NDEF data.
     private fun protectClassic(tag: Tag, password: String) {
         val mfc = MifareClassic.get(tag) ?: return
-        val keyB = passwordTo6Bytes(password)
+        val keyB = passwordToKey(password, 6)
         Thread.sleep(50) // let the tag settle after the NDEF write
         mfc.connect()
         try {
@@ -473,7 +475,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     /// restoring the factory transport configuration.
     private fun unprotectClassic(tag: Tag, password: String) {
         val mfc = MifareClassic.get(tag) ?: return
-        val keyB = passwordTo6Bytes(password)
+        val keyB = passwordToKey(password, 6)
         mfc.connect()
         try {
             for (sector in 1 until mfc.sectorCount) {
