@@ -1,6 +1,8 @@
 package cn.bh2vsq.qslmanager
 
+import android.app.PendingIntent
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.media.ToneGenerator
@@ -43,6 +45,12 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     private var nfcHandlerThread: HandlerThread? = null
     private var nfcHandler: Handler? = null
 
+    // Active write/format session, delivered to onNewIntent via foreground
+    // dispatch (reader mode is unreliable for MIFARE Classic writes).
+    private var nfcOperation: String? = null // "write" or "format"
+    private var nfcWriteUrl: String? = null
+    private var nfcWritePassword: String? = null
+
     // Identity written to each QSL tag so the client can be recognised by its
     // package name and signing certificate when the tag is scanned back.
     private val identityDomain = "cn.bh2vsq.qslmanager"
@@ -65,7 +73,29 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handleIntent(intent)
+        if (nfcOperation != null) {
+            handleNfcTag(intent)
+        } else {
+            handleIntent(intent)
+        }
+    }
+
+    /// Forwards a tag detected during an active write/format session.
+    private fun handleNfcTag(intent: Intent) {
+        val operation = nfcOperation ?: return
+        val tag: Tag? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(NfcAdapter.EXTRA_TAG, Tag::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(NfcAdapter.EXTRA_TAG)
+        }
+        if (tag == null) return
+        val url = nfcWriteUrl
+        val password = nfcWritePassword ?: ""
+        if (operation == "write") {
+            stopNfc() // single-shot: stop accepting further tags
+        }
+        nfcHandler?.post { writeTag(tag, operation, url, password) }
     }
 
     private fun handleIntent(intent: Intent?) {
@@ -195,15 +225,26 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
         ensureNfcHandler()
         stopNfc()
 
-        val flags = NfcAdapter.FLAG_READER_NFC_A or
-            NfcAdapter.FLAG_READER_NFC_B or
-            NfcAdapter.FLAG_READER_NFC_F or
-            NfcAdapter.FLAG_READER_NFC_V or
-            NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS
+        nfcOperation = mode
+        nfcWriteUrl = url
+        nfcWritePassword = password
 
-        adapter.enableReaderMode(this, { tag ->
-            nfcHandler?.post { writeTag(tag, mode, url, password) }
-        }, flags, null)
+        val intent = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val filters = arrayOf(
+            IntentFilter(NfcAdapter.ACTION_TECH_DISCOVERED),
+            IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED).apply { addDataType("*/*") },
+            IntentFilter(NfcAdapter.ACTION_TAG_DISCOVERED),
+        )
+        val techLists = arrayOf(
+            arrayOf(NfcA::class.java.name),
+            arrayOf(MifareClassic::class.java.name),
+            arrayOf(MifareUltralight::class.java.name),
+        )
+        adapter.enableForegroundDispatch(this, pendingIntent, filters, techLists)
 
         result.success(null)
     }
@@ -515,16 +556,18 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     }
 
     private fun stopNfc() {
+        nfcOperation = null
+        nfcWriteUrl = null
+        nfcWritePassword = null
         val disable = Runnable {
             try {
-                NfcAdapter.getDefaultAdapter(this@MainActivity)?.disableReaderMode(this@MainActivity)
+                NfcAdapter.getDefaultAdapter(this@MainActivity)?.disableForegroundDispatch(this@MainActivity)
             } catch (_: Exception) {
             }
         }
-        // disableReaderMode must run on the main thread. When stopNfc() is
-        // called from the main thread (startNfcOperation / the stopNfc method
-        // channel), run it synchronously so it cannot race the enableReaderMode
-        // that follows; from the NFC handler thread, post it to the main looper.
+        // disableForegroundDispatch must run on the main thread. When stopNfc()
+        // is called from the main thread, run it synchronously so it cannot race
+        // the enableForegroundDispatch that follows; otherwise post to main.
         if (Looper.myLooper() == Looper.getMainLooper()) {
             disable.run()
         } else {
