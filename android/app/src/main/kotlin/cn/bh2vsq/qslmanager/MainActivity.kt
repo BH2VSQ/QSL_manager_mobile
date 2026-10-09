@@ -12,6 +12,7 @@ import android.nfc.Tag
 import android.nfc.tech.MifareUltralight
 import android.nfc.tech.Ndef
 import android.nfc.tech.NdefFormatable
+import android.nfc.tech.NfcA
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -251,19 +252,31 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
 
             if (written) {
                 // For writing, lock the tag with the password so it cannot be
-                // rewritten without authenticating first.
+                // rewritten without authenticating first. A password failure
+                // does not discard the data that was just written.
+                var protectFailed: String? = null
                 if (mode == "write" && password.isNotEmpty()) {
-                    protectTag(tag, password)
+                    try {
+                        protectTag(tag, password)
+                    } catch (e: Exception) {
+                        protectFailed = "数据已写入，但设置密码失败：${e.message ?: e.toString()}"
+                    }
                 }
                 playBeep()
-                emitEvent(JSONObject(mapOf("type" to "success", "mode" to mode)).toString())
+                if (protectFailed != null) {
+                    emitEvent(JSONObject(mapOf("type" to "error", "message" to protectFailed)).toString())
+                } else {
+                    emitEvent(JSONObject(mapOf("type" to "success", "mode" to mode)).toString())
+                }
                 if (mode == "write") stopNfc()
             } else {
                 emitEvent(JSONObject(mapOf("type" to "error", "message" to "标签不可写")).toString())
                 if (mode == "write") stopNfc()
             }
         } catch (e: Exception) {
-            emitEvent(JSONObject(mapOf("type" to "error", "message" to (e.message ?: e.toString()))).toString())
+            val reason = e.message ?: e.toString()
+            val message = if (mode == "write") "写入失败：$reason" else "格式化失败：$reason"
+            emitEvent(JSONObject(mapOf("type" to "error", "message" to message)).toString())
             if (mode == "write") stopNfc()
         }
     }
@@ -284,9 +297,9 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
 
     /// Reads the CC (capability container) to identify the NTAG model and return
     /// its configuration-page addresses, or null for an unknown tag.
-    private fun readNtagConfig(mfu: MifareUltralight): NtagConfig? {
+    private fun readNtagConfig(nfcA: NfcA): NtagConfig? {
         return try {
-            val cc = mfu.transceive(byteArrayOf(0x30.toByte(), 0x03)) ?: return null
+            val cc = nfcA.transceive(byteArrayOf(0x30.toByte(), 0x03)) ?: return null
             val mlen = cc.getOrNull(2)?.toInt()?.and(0xFF) ?: return null
             when (mlen) {
                 0x12 -> NtagConfig(0x29, 0x2A, 0x2B, 0x2C) // NTAG213
@@ -300,40 +313,44 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     }
 
     /// Writes a single NTAG page (WRITE command carries the page + 4 bytes).
-    private fun writeNtagPage(mfu: MifareUltralight, page: Int, data: ByteArray) {
+    /// NTAG EEPROM writes take a few ms each, so pause briefly between pages.
+    private fun writeNtagPage(nfcA: NfcA, page: Int, data: ByteArray) {
         val cmd = ByteArray(6)
         cmd[0] = 0xA2.toByte()
         cmd[1] = page.toByte()
         System.arraycopy(data, 0, cmd, 2, 4)
-        mfu.transceive(cmd)
+        nfcA.transceive(cmd)
+        Thread.sleep(5)
     }
 
     /// Applies the password to an NTAG after the NDEF payload has been written,
     /// so the data pages cannot be rewritten without authenticating first.
     private fun protectTag(tag: Tag, password: String) {
-        val mfu = MifareUltralight.get(tag) ?: return
-        mfu.connect()
+        if (MifareUltralight.get(tag) == null) return // not an NTAG/Ultralight
+        val nfcA = NfcA.get(tag) ?: return
+        nfcA.connect()
         try {
-            val cfg = readNtagConfig(mfu) ?: return
+            val cfg = readNtagConfig(nfcA) ?: return
             val pwd = passwordToBytes(password)
-            writeNtagPage(mfu, cfg.pwd, pwd)                         // PWD
-            writeNtagPage(mfu, cfg.pack, ByteArray(4))               // PACK (RFUI = 0)
-            writeNtagPage(mfu, cfg.cfg0, byteArrayOf(0, 0, 0, 0))    // AUTH0 = 0x00
-            writeNtagPage(mfu, cfg.cfg1, byteArrayOf(0x80.toByte(), 0, 0, 0)) // ACCESS = 0x80
+            writeNtagPage(nfcA, cfg.pwd, pwd)                         // PWD
+            writeNtagPage(nfcA, cfg.pack, ByteArray(4))               // PACK (RFUI = 0)
+            writeNtagPage(nfcA, cfg.cfg0, byteArrayOf(0, 0, 0, 0))    // AUTH0 = 0x00
+            writeNtagPage(nfcA, cfg.cfg1, byteArrayOf(0x80.toByte(), 0, 0, 0)) // ACCESS = 0x80
         } finally {
-            mfu.close()
+            nfcA.close()
         }
     }
 
     /// Removes NTAG password protection before formatting. Throws a descriptive
     /// error when the tag is protected but the password is missing or wrong.
     private fun unprotectTag(tag: Tag, password: String) {
-        val mfu = MifareUltralight.get(tag) ?: return
-        mfu.connect()
+        if (MifareUltralight.get(tag) == null) return // not an NTAG/Ultralight
+        val nfcA = NfcA.get(tag) ?: return
+        nfcA.connect()
         try {
-            val cfg = readNtagConfig(mfu) ?: return
+            val cfg = readNtagConfig(nfcA) ?: return
             // READ cfg0 returns pages [cfg0..cfg0+3]; byte 3 is AUTH0.
-            val cfgResp = mfu.transceive(byteArrayOf(0x30.toByte(), cfg.cfg0.toByte())) ?: return
+            val cfgResp = nfcA.transceive(byteArrayOf(0x30.toByte(), cfg.cfg0.toByte())) ?: return
             val auth0 = cfgResp.getOrNull(3)?.toInt()?.and(0xFF) ?: return
             if (auth0 == 0xFF) return // already unprotected
 
@@ -342,7 +359,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
             }
             val pwd = passwordToBytes(password)
             val authed = try {
-                val pack = mfu.transceive(byteArrayOf(0x1B.toByte(), pwd[0], pwd[1], pwd[2], pwd[3]))
+                val pack = nfcA.transceive(byteArrayOf(0x1B.toByte(), pwd[0], pwd[1], pwd[2], pwd[3]))
                 pack != null && pack.size == 2
             } catch (_: Exception) {
                 false
@@ -350,10 +367,10 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
             if (!authed) {
                 throw Exception("密码错误，无法解除标签保护")
             }
-            writeNtagPage(mfu, cfg.cfg0, byteArrayOf(0, 0, 0, 0xFF.toByte())) // AUTH0 = 0xFF
-            writeNtagPage(mfu, cfg.cfg1, ByteArray(4))                         // ACCESS = 0x00
+            writeNtagPage(nfcA, cfg.cfg0, byteArrayOf(0, 0, 0, 0xFF.toByte())) // AUTH0 = 0xFF
+            writeNtagPage(nfcA, cfg.cfg1, ByteArray(4))                         // ACCESS = 0x00
         } finally {
-            mfu.close()
+            nfcA.close()
         }
     }
 
