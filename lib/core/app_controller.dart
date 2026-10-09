@@ -10,7 +10,8 @@ class AppController extends ChangeNotifier {
   static const _darkModeKey = 'dark_mode';
   static const _nfcEnabledKey = 'nfc_enabled';
   static const _queryBaseUrlKey = 'nfc_query_base_url';
-  static const _nfcPasswordKey = 'nfc_password';
+  static const _nfcKeyAKey = 'nfc_key_a';
+  static const _nfcKeyBKey = 'nfc_key_b';
 
   final SharedPreferencesAsync preferences;
   final QslApi api;
@@ -23,7 +24,8 @@ class AppController extends ChangeNotifier {
   int connectionRevision = 0;
   bool nfcEnabled = false;
   String queryBaseUrl = '';
-  String nfcPassword = '';
+  String nfcKeyA = '';
+  String nfcKeyB = '';
 
   static Future<AppController> create() async {
     final prefs = SharedPreferencesAsync();
@@ -32,7 +34,8 @@ class AppController extends ChangeNotifier {
     final darkMode = await prefs.getBool(_darkModeKey) ?? true;
     final nfcEnabled = await prefs.getBool(_nfcEnabledKey) ?? false;
     final queryBaseUrl = await prefs.getString(_queryBaseUrlKey) ?? '';
-    final nfcPassword = await prefs.getString(_nfcPasswordKey) ?? '';
+    final nfcKeyA = await prefs.getString(_nfcKeyAKey) ?? '';
+    final nfcKeyB = await prefs.getString(_nfcKeyBKey) ?? '';
     return AppController(
       preferences: prefs,
       api: QslApi(baseUrl: baseUrl),
@@ -41,7 +44,8 @@ class AppController extends ChangeNotifier {
       ..darkMode = darkMode
       ..nfcEnabled = nfcEnabled
       ..queryBaseUrl = queryBaseUrl
-      ..nfcPassword = nfcPassword;
+      ..nfcKeyA = nfcKeyA
+      ..nfcKeyB = nfcKeyB;
   }
 
   Future<void> setBaseUrl(String value) async {
@@ -77,9 +81,15 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setNfcPassword(String value) async {
-    nfcPassword = value.trim();
-    await preferences.setString(_nfcPasswordKey, nfcPassword);
+  Future<void> setNfcKeyA(String value) async {
+    nfcKeyA = value.trim();
+    await preferences.setString(_nfcKeyAKey, nfcKeyA);
+    notifyListeners();
+  }
+
+  Future<void> setNfcKeyB(String value) async {
+    nfcKeyB = value.trim();
+    await preferences.setString(_nfcKeyBKey, nfcKeyB);
     notifyListeners();
   }
 
