@@ -1,6 +1,7 @@
 package cn.bh2vsq.qslmanager
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.net.Uri
@@ -23,6 +24,7 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONObject
 import java.io.File
+import java.security.MessageDigest
 
 class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     private val updateChannelName = "qslmm/app_update"
@@ -38,6 +40,12 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     private var nfcHandlerThread: HandlerThread? = null
     private var nfcHandler: Handler? = null
 
+    // Identity written to each QSL tag so the client can be recognised by its
+    // package name and signing certificate when the tag is scanned back.
+    private val identityDomain = "cn.bh2vsq.qslmanager"
+    private val identityType = "identity"
+    private val identityFullType = "$identityDomain:$identityType"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         handleIntent(intent)
@@ -51,7 +59,14 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
         val action = intent.action ?: return
-        if (action == NfcAdapter.ACTION_NDEF_DISCOVERED || action == Intent.ACTION_VIEW) {
+        if (action == NfcAdapter.ACTION_NDEF_DISCOVERED) {
+            // Only deep-link into QSLMM when the tag carries our identity record
+            // with a matching package name and signing certificate. A foreign or
+            // legacy URI tag still opens the web page via the browser fallback.
+            if (matchesAppIdentity(intent)) {
+                intent.data?.let { pendingLaunchUri = it.toString() }
+            }
+        } else if (action == Intent.ACTION_VIEW) {
             intent.data?.let { pendingLaunchUri = it.toString() }
         }
     }
@@ -182,12 +197,16 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     private fun writeTag(tag: Tag, mode: String, url: String?) {
         try {
             val message = when (mode) {
-                // A bare URI record, with no Android Application Record, so a
-                // device without QSLMM opens the QSL query URL in the browser
-                // instead of being bounced to the Play Store. When QSLMM is
-                // installed, the NDEF_DISCOVERED filter in the manifest still
-                // routes the tag here for deep-linking.
-                "write" -> NdefMessage(arrayOf(NdefRecord.createUri(url ?: "")))
+                // URI first so a device without QSLMM opens the query URL in the
+                // browser, followed by an identity record carrying this app's
+                // package name and signing certificate so QSLMM can verify the
+                // tag on a later scan.
+                "write" -> NdefMessage(
+                    arrayOf(
+                        NdefRecord.createUri(url ?: ""),
+                        buildIdentityRecord()
+                    )
+                )
                 // A single empty record is a valid NDEF message and clears the
                 // tag; NdefMessage() with zero records throws "must have at
                 // least one record".
@@ -239,6 +258,57 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
         Handler(Looper.getMainLooper()).post {
             nfcEventSink?.success(json)
         }
+    }
+
+    /// SHA-256 fingerprint of the app's first signing certificate.
+    private fun appSignatureSha256(): String? {
+        return try {
+            val signers = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+                    .signingInfo?.apkContentsSigners
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
+            }
+            val cert = signers?.firstOrNull() ?: return null
+            MessageDigest.getInstance("SHA-256")
+                .digest(cert.toByteArray())
+                .joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /// An external-type NDEF record carrying this app's package name and
+    /// signing-certificate fingerprint, used to recognise a tag on a later scan.
+    private fun buildIdentityRecord(): NdefRecord {
+        val json = JSONObject()
+            .put("package", packageName)
+            .put("signature", appSignatureSha256() ?: "")
+            .toString()
+        return NdefRecord.createExternal(identityDomain, identityType, json.toByteArray(Charsets.UTF_8))
+    }
+
+    /// True when the intent's NDEF payload carries our identity record with a
+    /// matching package name and signature. Tags without an identity record are
+    /// treated as legacy/foreign URIs and still allowed through.
+    private fun matchesAppIdentity(intent: Intent): Boolean {
+        val messages = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES) ?: return true
+        for (item in messages) {
+            val message = item as? NdefMessage ?: continue
+            for (record in message.records) {
+                if (record.tnf != NdefRecord.TNF_EXTERNAL_TYPE) continue
+                if (String(record.type, Charsets.UTF_8) != identityFullType) continue
+                val expected = appSignatureSha256() ?: return false
+                return try {
+                    val json = JSONObject(String(record.payload, Charsets.UTF_8))
+                    json.optString("package") == packageName && json.optString("signature") == expected
+                } catch (_: Exception) {
+                    false
+                }
+            }
+        }
+        return true
     }
 
     private fun stopNfc() {

@@ -1,7 +1,7 @@
 name: qsl_manager_mobile
 description: Android mobile console for BH2VSQ QSLCard-Manager.
 publish_to: "none"
-version: 0.3.9
+version: 0.3.10
 
 environment:
   sdk: ">=3.11.0 <4.0.0"
