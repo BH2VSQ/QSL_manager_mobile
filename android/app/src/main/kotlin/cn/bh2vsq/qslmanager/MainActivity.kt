@@ -291,6 +291,10 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
                 } finally {
                     ndef.close()
                 }
+            } else if (MifareClassic.get(tag) != null) {
+                // MIFARE Classic: write directly (MAD + TLV) because
+                // NdefFormatable.format() is unreliable on many devices.
+                written = writeClassicNdef(tag, message)
             } else {
                 val formattable = NdefFormatable.get(tag)
                 if (formattable != null) {
@@ -502,6 +506,65 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
         System.arraycopy(access, 0, trailer, 6, 4)
         System.arraycopy(keyB, 0, trailer, 10, 6)
         return trailer
+    }
+
+    // MIFARE Classic NDEF (MAD) format: sector 0 holds the application directory,
+    // data sectors 1..N-1 hold the NDEF TLV. All sectors are mapped to the NDEF
+    // application (AID 0x0003 -> entry bytes 0x03 0x00).
+    private val madBlock1 = byteArrayOf(
+        0x01, 0x00, 0x00,
+        0x03, 0x00, 0x03, 0x00, 0x03, 0x00, 0x03, 0x00, 0x03, 0x00, 0x03, 0x00,
+        0x00
+    )
+    private val madBlock2 = ByteArray(16) { if (it % 2 == 0) 0x03 else 0x00 }
+
+    /// Builds an NDEF TLV: 0x03, length (1 or 3 bytes), message, 0xFE terminator.
+    private fun buildNdefTlv(ndef: ByteArray): ByteArray {
+        val lengthBytes = if (ndef.size < 0xFF) {
+            byteArrayOf(ndef.size.toByte())
+        } else {
+            byteArrayOf(0xFF.toByte(), (ndef.size shr 8).toByte(), ndef.size.toByte())
+        }
+        val tlv = ByteArray(1 + lengthBytes.size + ndef.size + 1)
+        tlv[0] = 0x03.toByte()
+        System.arraycopy(lengthBytes, 0, tlv, 1, lengthBytes.size)
+        System.arraycopy(ndef, 0, tlv, 1 + lengthBytes.size, ndef.size)
+        tlv[tlv.size - 1] = 0xFE.toByte()
+        return tlv
+    }
+
+    /// Writes an NDEF message directly to a MIFARE Classic tag (MAD + TLV),
+    /// bypassing NdefFormatable.format() which throws a spurious IOException on
+    /// many devices. Returns true on success.
+    private fun writeClassicNdef(tag: Tag, message: NdefMessage): Boolean {
+        val mfc = MifareClassic.get(tag) ?: return false
+        val tlv = buildNdefTlv(message.toByteArray())
+        mfc.connect()
+        try {
+            // Sector 0: MAD in blocks 1-2 (block 0 is the read-only manufacturer
+            // block, block 3 is the trailer).
+            if (!authenticateClassic(mfc, 0)) return false
+            mfc.writeBlock(mfc.sectorToBlock(0) + 1, madBlock1)
+            mfc.writeBlock(mfc.sectorToBlock(0) + 2, madBlock2)
+
+            // Data sectors 1..N-1: the TLV, three 16-byte data blocks per sector.
+            var offset = 0
+            for (sector in 1 until mfc.sectorCount) {
+                if (!authenticateClassic(mfc, sector)) return false
+                val base = mfc.sectorToBlock(sector)
+                for (i in 0 until 3) {
+                    val block = ByteArray(16)
+                    for (b in 0 until 16) {
+                        block[b] = if (offset < tlv.size) tlv[offset++] else 0x00
+                    }
+                    mfc.writeBlock(base + i, block)
+                }
+                if (offset >= tlv.size) break
+            }
+            return true
+        } finally {
+            mfc.close()
+        }
     }
 
     /// SHA-256 fingerprint of the app's first signing certificate.
