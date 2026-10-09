@@ -37,9 +37,6 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     private var nfcEventSink: EventChannel.EventSink? = null
     private var nfcHandlerThread: HandlerThread? = null
     private var nfcHandler: Handler? = null
-    private var nfcOperation: String? = null // "write" or "format"
-    private var nfcWriteUrl: String? = null
-    private var nfcWritePackage: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -126,11 +123,10 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
                 }
                 "startNfcWrite" -> {
                     val url = call.argument<String>("url") ?: ""
-                    val packageName = call.argument<String>("packageName") ?: ""
-                    startNfcOperation("write", url, packageName, result)
+                    startNfcOperation("write", url, result)
                 }
                 "startNfcFormat" -> {
-                    startNfcOperation("format", null, null, result)
+                    startNfcOperation("format", null, result)
                 }
                 "stopNfc" -> {
                     stopNfc()
@@ -156,7 +152,7 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
         }
     }
 
-    private fun startNfcOperation(mode: String, url: String?, packageName: String?, result: MethodChannel.Result) {
+    private fun startNfcOperation(mode: String, url: String?, result: MethodChannel.Result) {
         val adapter = NfcAdapter.getDefaultAdapter(this)
         if (adapter == null) {
             result.error("NFC_UNSUPPORTED", "NFC not supported", null)
@@ -169,9 +165,6 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
 
         ensureNfcHandler()
         stopNfc()
-        nfcOperation = mode
-        nfcWriteUrl = url
-        nfcWritePackage = packageName
 
         val flags = NfcAdapter.FLAG_READER_NFC_A or
             NfcAdapter.FLAG_READER_NFC_B or
@@ -180,22 +173,27 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
             NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS
 
         adapter.enableReaderMode(this, { tag ->
-            nfcHandler?.post { writeTag(tag, mode, url, packageName) }
+            nfcHandler?.post { writeTag(tag, mode, url) }
         }, flags, null)
 
         result.success(null)
     }
 
-    private fun writeTag(tag: Tag, mode: String, url: String?, packageName: String?) {
+    private fun writeTag(tag: Tag, mode: String, url: String?) {
         try {
             val message = when (mode) {
-                "write" -> NdefMessage(
-                    arrayOf(
-                        NdefRecord.createUri(url ?: ""),
-                        NdefRecord.createApplicationRecord(packageName ?: "")
-                    )
+                // A bare URI record, with no Android Application Record, so a
+                // device without QSLMM opens the QSL query URL in the browser
+                // instead of being bounced to the Play Store. When QSLMM is
+                // installed, the NDEF_DISCOVERED filter in the manifest still
+                // routes the tag here for deep-linking.
+                "write" -> NdefMessage(arrayOf(NdefRecord.createUri(url ?: "")))
+                // A single empty record is a valid NDEF message and clears the
+                // tag; NdefMessage() with zero records throws "must have at
+                // least one record".
+                else -> NdefMessage(
+                    arrayOf(NdefRecord(NdefRecord.TNF_EMPTY, ByteArray(0), ByteArray(0), ByteArray(0)))
                 )
-                else -> NdefMessage(arrayOf())
             }
 
             var written = false
@@ -244,7 +242,6 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     }
 
     private fun stopNfc() {
-        nfcOperation = null
         val disable = Runnable {
             try {
                 NfcAdapter.getDefaultAdapter(this@MainActivity)?.disableReaderMode(this@MainActivity)

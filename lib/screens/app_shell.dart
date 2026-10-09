@@ -52,8 +52,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   /// Handles a URI delivered by scanning a previously-written NFC tag. When
-  /// QSLMM is installed, the tag's Android Application Record routes the scan
-  /// here instead of the browser; the `q` query parameter holds the QSL id.
+  /// QSLMM is installed, the NDEF_DISCOVERED filter routes the scan here
+  /// instead of the browser; the `q` query parameter holds the QSL id.
   Future<void> _checkNfcLaunch() async {
     final uri = await NfcService.consumeLaunchUri();
     if (!mounted || uri == null || uri.isEmpty) return;

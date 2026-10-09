@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/app_controller.dart';
 import '../core/app_theme.dart';
@@ -129,7 +128,6 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
       return;
     }
 
-    final packageName = (await PackageInfo.fromPlatform()).packageName;
     final url = NfcService.buildQueryUrl(queryBaseUrl: base, qslId: current.qslId);
 
     if (!mounted) return;
@@ -141,7 +139,6 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
           title: '写入 NFC',
           instruction: '请将 NFC 标签靠近手机背部\n写入卡片 ${current.qslId} 的查询链接',
           url: url,
-          packageName: packageName,
           successMessage: '写入成功：${current.qslId}',
         ),
       ),

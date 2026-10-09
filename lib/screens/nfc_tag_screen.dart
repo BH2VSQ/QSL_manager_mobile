@@ -19,7 +19,6 @@ class NfcTagScreen extends StatefulWidget {
     required this.instruction,
     required this.successMessage,
     this.url,
-    this.packageName,
   });
 
   final NfcTagMode mode;
@@ -27,7 +26,6 @@ class NfcTagScreen extends StatefulWidget {
   final String instruction;
   final String successMessage;
   final String? url;
-  final String? packageName;
 
   @override
   State<NfcTagScreen> createState() => _NfcTagScreenState();
@@ -50,7 +48,7 @@ class _NfcTagScreenState extends State<NfcTagScreen> {
   Future<void> _start() async {
     try {
       if (widget.mode == NfcTagMode.write) {
-        await NfcService.writeQslTag(url: widget.url ?? '', packageName: widget.packageName ?? '');
+        await NfcService.writeQslTag(url: widget.url ?? '');
       } else {
         await NfcService.formatTag();
       }

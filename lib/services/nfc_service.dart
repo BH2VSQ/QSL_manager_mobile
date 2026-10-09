@@ -69,10 +69,10 @@ class NfcService {
   static Future<bool> isNfcUsable() async =>
       (await availability()) == NfcAvailability.available;
 
-  /// Starts a one-shot write of a QSL query link (web URI + Android Application
-  /// Record) to the next tag brought near the phone.
-  static Future<void> writeQslTag({required String url, required String packageName}) async {
-    await _channel.invokeMethod<void>('startNfcWrite', {'url': url, 'packageName': packageName});
+  /// Starts a one-shot write of a QSL query link (a bare web URI) to the next
+  /// tag brought near the phone.
+  static Future<void> writeQslTag({required String url}) async {
+    await _channel.invokeMethod<void>('startNfcWrite', {'url': url});
   }
 
   /// Starts a persistent clear/format session; each new tag is cleared until
