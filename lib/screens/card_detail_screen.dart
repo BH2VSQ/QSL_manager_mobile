@@ -130,20 +130,18 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
     }
 
     final packageName = (await PackageInfo.fromPlatform()).packageName;
-    final message = NfcService.buildQslLinkMessage(
-      queryBaseUrl: base,
-      qslId: current.qslId,
-      packageName: packageName,
-    );
+    final url = NfcService.buildQueryUrl(queryBaseUrl: base, qslId: current.qslId);
 
     if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => NfcTagScreen(
+          mode: NfcTagMode.write,
           title: '写入 NFC',
           instruction: '请将 NFC 标签靠近手机背部\n写入卡片 ${current.qslId} 的查询链接',
-          records: message,
+          url: url,
+          packageName: packageName,
           successMessage: '写入成功：${current.qslId}',
         ),
       ),

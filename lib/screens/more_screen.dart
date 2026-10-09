@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:ndef/ndef.dart' as ndef;
 
 import '../core/app_controller.dart';
 import '../core/app_theme.dart';
@@ -102,11 +101,10 @@ class _MoreScreenState extends State<MoreScreen> {
               context,
               MaterialPageRoute(
                 builder: (_) => const NfcTagScreen(
+                  mode: NfcTagMode.format,
                   title: 'Tag 格式化',
                   instruction: '将已写入数据的 Tag 贴至手机线圈处\n检测到标签后将自动清空',
-                  records: <ndef.NDEFRecord>[],
                   successMessage: '格式化完毕',
-                  repeat: true,
                 ),
               ),
             ),

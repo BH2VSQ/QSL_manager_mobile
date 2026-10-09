@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_nfc_kit/flutter_nfc_kit.dart';
 
 import '../core/app_controller.dart';
 import '../core/app_theme.dart';
@@ -20,7 +19,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController queryUrl;
   bool saving = false;
   bool savingQuery = false;
-  NFCAvailability _nfcAvailability = NFCAvailability.not_supported;
+  NfcAvailability _nfcAvailability = NfcAvailability.notSupported;
 
   @override
   void initState() {
@@ -180,20 +179,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
                   value: widget.controller.nfcEnabled,
-                  onChanged: _nfcAvailability == NFCAvailability.not_supported
+                  onChanged: _nfcAvailability == NfcAvailability.notSupported
                       ? null
                       : (value) => widget.controller.setNfcEnabled(value),
                   title: const Text('启用 NFC 写入'),
                   subtitle: Text(
-                    _nfcAvailability == NFCAvailability.not_supported
+                    _nfcAvailability == NfcAvailability.notSupported
                         ? '此设备不支持 NFC'
-                        : _nfcAvailability == NFCAvailability.disabled
+                        : _nfcAvailability == NfcAvailability.disabled
                             ? 'NFC 已在系统设置中关闭'
                             : '将 QSL 查询链接写入 NFC 标签',
                   ),
                   secondary: Icon(
                     Icons.nfc,
-                    color: _nfcAvailability == NFCAvailability.not_supported ? AppPalette.textDim : AppPalette.cyan,
+                    color: _nfcAvailability == NfcAvailability.notSupported ? AppPalette.textDim : AppPalette.cyan,
                   ),
                 ),
                 const SizedBox(height: 8),
