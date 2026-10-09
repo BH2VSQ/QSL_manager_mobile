@@ -244,13 +244,22 @@ class MainActivity : FlutterActivity(), EventChannel.StreamHandler {
     }
 
     private fun stopNfc() {
-        Handler(Looper.getMainLooper()).post {
+        nfcOperation = null
+        val disable = Runnable {
             try {
                 NfcAdapter.getDefaultAdapter(this@MainActivity)?.disableReaderMode(this@MainActivity)
             } catch (_: Exception) {
             }
         }
-        nfcOperation = null
+        // disableReaderMode must run on the main thread. When stopNfc() is
+        // called from the main thread (startNfcOperation / the stopNfc method
+        // channel), run it synchronously so it cannot race the enableReaderMode
+        // that follows; from the NFC handler thread, post it to the main looper.
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            disable.run()
+        } else {
+            Handler(Looper.getMainLooper()).post(disable)
+        }
     }
 
     private fun playBeep() {
